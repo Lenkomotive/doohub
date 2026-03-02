@@ -24,6 +24,7 @@ class SessionsCubit extends Cubit<SessionsState> {
             final info = e.value as Map<String, dynamic>;
             return Session(
               sessionKey: e.key,
+              name: info['name'] as String? ?? e.key,
               status: info['status'] as String? ?? 'idle',
               model: info['model'] as String? ?? '',
               projectPath: info['project_path'] as String? ?? '',
@@ -50,6 +51,7 @@ class SessionsCubit extends Cubit<SessionsState> {
             if (s.sessionKey == key) {
               return Session(
                 sessionKey: s.sessionKey,
+                name: s.name,
                 status: newStatus,
                 model: s.model,
                 projectPath: s.projectPath,
@@ -105,12 +107,12 @@ class SessionsCubit extends Cubit<SessionsState> {
   }
 
   Future<void> createSession({
-    required String sessionKey,
+    required String name,
     required String projectPath,
     String model = 'sonnet',
   }) async {
     await api.createSession(
-      sessionKey: sessionKey,
+      name: name,
       projectPath: projectPath,
       model: model,
     );

@@ -60,7 +60,7 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Row(
                   children: [
-                    Text(widget.sessionKey, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                    Text(state.session?['name'] as String? ?? widget.sessionKey, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),

@@ -1,4 +1,5 @@
 import json
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -31,18 +32,18 @@ async def create_session(
     db: DBSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if db.query(Session).filter(Session.session_key == body.session_key).first():
-        raise HTTPException(status_code=409, detail="Session key already exists")
+    session_key = uuid4().hex[:12]
     session = Session(
         user_id=user.id,
-        session_key=body.session_key,
+        session_key=session_key,
+        name=body.name,
         project_path=body.project_path,
         model=body.model,
         interactive=body.interactive,
     )
     db.add(session)
     db.commit()
-    return {"session_key": body.session_key}
+    return {"session_key": session_key, "name": body.name}
 
 
 @router.get("/sessions/events")
@@ -55,6 +56,7 @@ async def session_events(
     user_keys = {s.session_key for s in user_sessions}
     session_map = {
         s.session_key: {
+            "name": s.name,
             "model": s.model,
             "project_path": s.project_path,
             "interactive": s.interactive,
@@ -94,6 +96,7 @@ async def list_sessions(
     result = [
         {
             "session_key": s.session_key,
+            "name": s.name,
             "created_at": s.created_at.isoformat(),
             "status": "idle",
             "model": s.model,
@@ -121,6 +124,7 @@ async def get_session(
         raise HTTPException(status_code=404, detail="Session not found")
     return {
         "session_key": session.session_key,
+        "name": session.name,
         "status": "idle",
         "model": session.model,
         "project_path": session.project_path,

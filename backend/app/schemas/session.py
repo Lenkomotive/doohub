@@ -2,8 +2,8 @@ from pydantic import BaseModel
 
 
 class CreateSessionRequest(BaseModel):
-    session_key: str
-    model: str = "sonnet"
+    name: str
+    model: str = "claude-opus-4-6"
     project_path: str
     interactive: bool = False
 

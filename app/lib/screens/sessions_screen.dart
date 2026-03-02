@@ -153,13 +153,13 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   }
 
   Future<void> _submit() async {
-    final key = _keyController.text.trim();
+    final name = _keyController.text.trim();
     final path = _selectedRepo ?? _pathController.text.trim();
-    if (key.isEmpty || path.isEmpty) return;
+    if (name.isEmpty || path.isEmpty) return;
 
     setState(() => _loading = true);
     try {
-      await widget.cubit.createSession(sessionKey: key, projectPath: path, model: _selectedModel);
+      await widget.cubit.createSession(name: name, projectPath: path, model: _selectedModel);
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
       setState(() => _loading = false);
@@ -249,7 +249,7 @@ class _SessionTile extends StatelessWidget {
           child: ListTile(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             onTap: onTap,
-            title: Text(session.sessionKey, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            title: Text(session.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

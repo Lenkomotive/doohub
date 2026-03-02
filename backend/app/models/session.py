@@ -11,7 +11,8 @@ class Session(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    session_key: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    session_key: Mapped[str] = mapped_column(String(100), index=True)
+    name: Mapped[str] = mapped_column(String(200), default="untitled")
     project_path: Mapped[str] = mapped_column(String(500), default="")
     model: Mapped[str] = mapped_column(String(50), default="claude-opus-4-6")
     interactive: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -1,5 +1,6 @@
 class Session {
   final String sessionKey;
+  final String name;
   final String status;
   final String model;
   final String projectPath;
@@ -8,6 +9,7 @@ class Session {
 
   Session({
     required this.sessionKey,
+    required this.name,
     required this.status,
     required this.model,
     required this.projectPath,
@@ -18,6 +20,7 @@ class Session {
   factory Session.fromJson(Map<String, dynamic> json) {
     return Session(
       sessionKey: json['session_key'],
+      name: json['name'] ?? json['session_key'],
       status: json['status'],
       model: json['model'] ?? '',
       projectPath: json['project_path'] ?? '',
