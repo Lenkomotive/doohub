@@ -8,10 +8,24 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      slave:
+        condition: service_started
     env_file: .env
     restart: unless-stopped
     networks:
       - default
+      - doohub-net
+
+  slave:
+    build:
+      context: ./slave
+    env_file: .env.slave
+    restart: unless-stopped
+    volumes:
+      - slave-data:/data
+      - slave-projects:/projects
+      - slave-claude:/home/claude/.claude
+    networks:
       - doohub-net
 
   db:
@@ -35,3 +49,6 @@ networks:
 
 volumes:
   pgdata:
+  slave-data:
+  slave-projects:
+  slave-claude:
