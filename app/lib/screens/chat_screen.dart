@@ -50,7 +50,7 @@ class _ChatScreenState extends State<ChatScreen> {
       listener: (context, state) => _scrollToBottom(),
       builder: (context, state) {
         final cubit = context.read<ChatCubit>();
-        final status = state.session?['status'] ?? 'loading';
+        final status = state.sending ? 'busy' : (state.session?['status'] as String? ?? 'idle');
 
         return Scaffold(
           appBar: AppBar(
