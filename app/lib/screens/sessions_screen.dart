@@ -132,6 +132,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   final _pathController = TextEditingController();
   List<String> _repos = [];
   String? _selectedRepo;
+  String _selectedModel = 'sonnet';
   bool _loading = false;
   bool _loadingRepos = true;
 
@@ -158,7 +159,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
 
     setState(() => _loading = true);
     try {
-      await widget.cubit.createSession(sessionKey: key, projectPath: path);
+      await widget.cubit.createSession(sessionKey: key, projectPath: path, model: _selectedModel);
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
       setState(() => _loading = false);
@@ -179,6 +180,17 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
             controller: _keyController,
             decoration: const InputDecoration(labelText: 'Session name', border: OutlineInputBorder()),
             textInputAction: TextInputAction.next,
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _selectedModel,
+            decoration: const InputDecoration(labelText: 'Model', border: OutlineInputBorder()),
+            items: const [
+              DropdownMenuItem(value: 'sonnet', child: Text('Sonnet')),
+              DropdownMenuItem(value: 'opus', child: Text('Opus')),
+              DropdownMenuItem(value: 'haiku', child: Text('Haiku')),
+            ],
+            onChanged: (v) => setState(() => _selectedModel = v ?? 'sonnet'),
           ),
           const SizedBox(height: 12),
           if (_loadingRepos)
