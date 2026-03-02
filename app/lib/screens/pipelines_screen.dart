@@ -1,67 +1,20 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/pipeline.dart';
-import '../services/api.dart';
+import '../bloc/pipelines/pipelines_cubit.dart';
+import '../bloc/pipelines/pipelines_state.dart';
 
-class PipelinesScreen extends StatefulWidget {
-  final ApiService api;
+class PipelinesScreen extends StatelessWidget {
+  const PipelinesScreen({super.key});
 
-  const PipelinesScreen({super.key, required this.api});
-
-  @override
-  State<PipelinesScreen> createState() => _PipelinesScreenState();
-}
-
-class _PipelinesScreenState extends State<PipelinesScreen> {
-  List<Pipeline> _pipelines = [];
-  int _total = 0;
-  String? _filter;
-  bool _loading = true;
-  Timer? _timer;
-
-  final _filters = [
+  static const _filters = [
     (label: 'All', value: null),
     (label: 'Active', value: 'active'),
     (label: 'Done', value: 'done'),
     (label: 'Failed', value: 'failed'),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _fetch();
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _fetch());
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _fetch() async {
-    try {
-      final data = await widget.api.getPipelines(status: _filter);
-      if (!mounted) return;
-      setState(() {
-        _pipelines = (data['pipelines'] as List).map((e) => Pipeline.fromJson(e)).toList();
-        _total = data['total'] ?? _pipelines.length;
-        _loading = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  void _setFilter(String? value) {
-    setState(() {
-      _filter = value;
-      _loading = true;
-    });
-    _fetch();
-  }
-
-  String _timeAgo(DateTime dt) {
+  static String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inSeconds < 60) return 'just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
@@ -71,59 +24,65 @@ class _PipelinesScreenState extends State<PipelinesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Header
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-          child: Row(
-            children: [
-              Text('Pipelines', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
-              const SizedBox(width: 8),
-              Text('($_total)', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
-              const Spacer(),
-              ...(_filters.map((f) => Padding(
-                padding: const EdgeInsets.only(left: 2),
-                child: ChoiceChip(
-                  label: Text(f.label, style: const TextStyle(fontSize: 12)),
-                  selected: _filter == f.value,
-                  onSelected: (_) => _setFilter(f.value),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ))),
-            ],
-          ),
-        ),
+    return BlocBuilder<PipelinesCubit, PipelinesState>(
+      builder: (context, state) {
+        final cubit = context.read<PipelinesCubit>();
 
-        // List
-        Expanded(
-          child: _loading && _pipelines.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : _pipelines.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.account_tree_outlined, size: 32, color: Colors.grey.shade600),
-                          const SizedBox(height: 8),
-                          Text('No pipelines', style: TextStyle(color: Colors.grey.shade600)),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _fetch,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: _pipelines.length,
-                        itemBuilder: (context, index) {
-                          final p = _pipelines[index];
-                          return _PipelineTile(pipeline: p, timeAgo: _timeAgo);
-                        },
-                      ),
+        return Column(
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Row(
+                children: [
+                  Text('Pipelines', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
+                  const SizedBox(width: 8),
+                  Text('(${state.total})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
+                  const Spacer(),
+                  ...(_filters.map((f) => Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: ChoiceChip(
+                      label: Text(f.label, style: const TextStyle(fontSize: 12)),
+                      selected: state.filter == f.value,
+                      onSelected: (_) => cubit.setFilter(f.value),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-        ),
-      ],
+                  ))),
+                ],
+              ),
+            ),
+
+            // List
+            Expanded(
+              child: state.status == PipelinesStatus.loading && state.pipelines.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : state.pipelines.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.account_tree_outlined, size: 32, color: Colors.grey.shade600),
+                              const SizedBox(height: 8),
+                              Text('No pipelines', style: TextStyle(color: Colors.grey.shade600)),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: cubit.fetchPipelines,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            itemCount: state.pipelines.length,
+                            itemBuilder: (context, index) {
+                              final p = state.pipelines[index];
+                              return _PipelineTile(pipeline: p, timeAgo: _timeAgo);
+                            },
+                          ),
+                        ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
