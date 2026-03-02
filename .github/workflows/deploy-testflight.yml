@@ -116,9 +116,14 @@ jobs:
               <key>uploadSymbols</key>
               <true/>
               <key>signingStyle</key>
-              <string>automatic</string>
+              <string>manual</string>
               <key>signingCertificate</key>
               <string>Apple Distribution</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.doo.doohub</key>
+                  <string>${PP_NAME}</string>
+              </dict>
           </dict>
           </plist>
           EOF
@@ -148,8 +153,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -quiet \
             DEVELOPMENT_TEAM=XWG3ZN6SZ9 \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PRODUCT_BUNDLE_IDENTIFIER=com.doo.doohub
+            CODE_SIGN_IDENTITY="Apple Distribution"
 
           xcodebuild -exportArchive \
             -archivePath build/ios/archive/Runner.xcarchive \
