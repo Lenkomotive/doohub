@@ -65,14 +65,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                       decoration: BoxDecoration(
-                        color: (status == 'busy' ? Colors.green : Colors.grey).withValues(alpha: 0.15),
+                        color: (status == 'busy' ? Colors.red : Colors.green).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         status,
                         style: TextStyle(
                           fontSize: 10,
-                          color: status == 'busy' ? Colors.green : Colors.grey,
+                          color: status == 'busy' ? Colors.red : Colors.green,
                           fontWeight: FontWeight.w500,
                         ),
                       ),

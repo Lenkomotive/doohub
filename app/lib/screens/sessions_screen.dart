@@ -10,12 +10,6 @@ import 'chat_screen.dart';
 class SessionsScreen extends StatelessWidget {
   const SessionsScreen({super.key});
 
-  static const _filters = [
-    (label: 'All', value: null),
-    (label: 'Busy', value: 'busy'),
-    (label: 'Idle', value: 'idle'),
-  ];
-
   void _showCreateSheet(BuildContext context) {
     final cubit = context.read<SessionsCubit>();
     final api = context.read<ApiService>();
@@ -44,17 +38,6 @@ class SessionsScreen extends StatelessWidget {
                       Text('Sessions', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
                       const SizedBox(width: 8),
                       Text('(${state.total})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
-                      const Spacer(),
-                      ...(_filters.map((f) => Padding(
-                        padding: const EdgeInsets.only(left: 2),
-                        child: ChoiceChip(
-                          label: Text(f.label, style: const TextStyle(fontSize: 12)),
-                          selected: state.filter == f.value,
-                          onSelected: (_) => cubit.setFilter(f.value),
-                          visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ))),
                     ],
                   ),
                 ),
@@ -293,9 +276,8 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      'busy' => Colors.green,
-      'idle' => Colors.grey,
-      'failed' => Colors.red,
+      'busy' => Colors.red,
+      'idle' => Colors.green,
       _ => Colors.grey,
     };
 
