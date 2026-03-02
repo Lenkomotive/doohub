@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    ports:
+      - "${DOOHUB_PORT:-9000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    restart: unless-stopped
+    networks:
+      - default
+      - doohub-net
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=doohub
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-doohub}
+      - POSTGRES_DB=doohub
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doohub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  doohub-net:
+    external: true
+
+volumes:
+  pgdata:
