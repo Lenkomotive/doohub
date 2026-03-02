@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -139,6 +142,60 @@ class ApiService {
       'content': content,
     });
     return res.data;
+  }
+
+  // SSE streams
+
+  Stream<Map<String, dynamic>> sessionEvents() async* {
+    final token = await _storage.read(key: 'access_token');
+    final uri = Uri.parse('$baseUrl/sessions/events');
+    final request = await HttpClient().getUrl(uri)
+      ..headers.set('Authorization', 'Bearer ${token ?? ''}')
+      ..headers.set('Accept', 'text/event-stream')
+      ..headers.set('Cache-Control', 'no-cache');
+    final response = await request.close();
+    String eventType = 'message';
+    await for (final chunk in response.transform(const Utf8Decoder())) {
+      for (final line in chunk.split('\n')) {
+        if (line.startsWith('event:')) {
+          eventType = line.substring(6).trim();
+        } else if (line.startsWith('data:')) {
+          final dataStr = line.substring(5).trim();
+          try {
+            final data = jsonDecode(dataStr) as Map<String, dynamic>;
+            yield {'event': eventType, ...data};
+          } catch (_) {}
+          eventType = 'message';
+        }
+      }
+    }
+  }
+
+  Stream<Map<String, dynamic>> streamMessage(String key, String content) async* {
+    final token = await _storage.read(key: 'access_token');
+    final uri = Uri.parse('$baseUrl/sessions/$key/messages/stream');
+    final request = await HttpClient().postUrl(uri)
+      ..headers.set('Authorization', 'Bearer ${token ?? ''}')
+      ..headers.set('Accept', 'text/event-stream')
+      ..headers.set('Content-Type', 'application/json')
+      ..headers.set('Cache-Control', 'no-cache');
+    request.write(jsonEncode({'content': content}));
+    final response = await request.close();
+    String eventType = 'message';
+    await for (final chunk in response.transform(const Utf8Decoder())) {
+      for (final line in chunk.split('\n')) {
+        if (line.startsWith('event:')) {
+          eventType = line.substring(6).trim();
+        } else if (line.startsWith('data:')) {
+          final dataStr = line.substring(5).trim();
+          try {
+            final data = jsonDecode(dataStr) as Map<String, dynamic>;
+            yield {'event': eventType, ...data};
+          } catch (_) {}
+          eventType = 'message';
+        }
+      }
+    }
   }
 
   // Repos

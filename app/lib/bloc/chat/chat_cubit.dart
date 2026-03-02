@@ -7,13 +7,12 @@ import 'chat_state.dart';
 class ChatCubit extends Cubit<ChatState> {
   final ApiService api;
   final String sessionKey;
-  Timer? _timer;
+  StreamSubscription<Map<String, dynamic>>? _streamSub;
 
   ChatCubit({required this.api, required this.sessionKey})
       : super(const ChatState()) {
     fetchSession();
     fetchHistory();
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) => fetchSession());
   }
 
   Future<void> fetchSession() async {
@@ -51,25 +50,60 @@ class ChatCubit extends Cubit<ChatState> {
     emit(state.copyWith(
       messages: [...state.messages, optimistic],
       sending: true,
+      streamingContent: '',
     ));
 
-    try {
-      final res = await api.sendMessage(sessionKey, content);
-      final reply = Message(
-        id: DateTime.now().millisecondsSinceEpoch + 1,
-        role: 'assistant',
-        content: res['content'] ?? '',
-        createdAt: DateTime.now(),
-      );
-      emit(state.copyWith(
-        messages: [...state.messages, reply],
-        sending: false,
-      ));
-      fetchSession();
-    } catch (_) {
-      emit(state.copyWith(sending: false));
-      fetchHistory();
-    }
+    // Add a placeholder assistant bubble that will fill with tokens
+    final streamingMsg = Message(
+      id: DateTime.now().millisecondsSinceEpoch + 1,
+      role: 'assistant',
+      content: '',
+      createdAt: DateTime.now(),
+    );
+    emit(state.copyWith(
+      messages: [...state.messages, streamingMsg],
+    ));
+
+    _streamSub?.cancel();
+    _streamSub = api.streamMessage(sessionKey, content).listen(
+      (event) {
+        final evt = event['event'] as String?;
+        if (evt == 'token') {
+          final token = event['token'] as String? ?? '';
+          final current = state.streamingContent + token;
+          final msgs = List<Message>.from(state.messages);
+          msgs[msgs.length - 1] = Message(
+            id: streamingMsg.id,
+            role: 'assistant',
+            content: current,
+            createdAt: streamingMsg.createdAt,
+          );
+          emit(state.copyWith(messages: msgs, streamingContent: current));
+        } else if (evt == 'done') {
+          final result = event['result'] as String? ?? state.streamingContent;
+          final msgs = List<Message>.from(state.messages);
+          msgs[msgs.length - 1] = Message(
+            id: streamingMsg.id,
+            role: 'assistant',
+            content: result,
+            createdAt: streamingMsg.createdAt,
+          );
+          emit(state.copyWith(
+            messages: msgs,
+            sending: false,
+            streamingContent: '',
+          ));
+          fetchSession();
+        } else if (evt == 'error') {
+          emit(state.copyWith(sending: false, streamingContent: ''));
+          fetchHistory();
+        }
+      },
+      onError: (_) {
+        emit(state.copyWith(sending: false, streamingContent: ''));
+        fetchHistory();
+      },
+    );
   }
 
   Future<void> cancelSession() async {
@@ -83,7 +117,7 @@ class ChatCubit extends Cubit<ChatState> {
 
   @override
   Future<void> close() {
-    _timer?.cancel();
+    _streamSub?.cancel();
     return super.close();
   }
 }
