@@ -9,8 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useAuthStore } from "@/store/auth";
 
-
-
 export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
