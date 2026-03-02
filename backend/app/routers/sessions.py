@@ -55,7 +55,16 @@ async def list_sessions(
     sessions = []
     for s in local:
         info = provider_sessions.get(s.session_key, {})
-        entry = {"session_key": s.session_key, "created_at": s.created_at.isoformat(), **info}
+        entry = {
+            "session_key": s.session_key,
+            "created_at": s.created_at.isoformat(),
+            "status": "idle",
+            "model": "",
+            "project_path": "",
+            "interactive": False,
+            "claude_session_id": None,
+            **info,
+        }
         if status and entry.get("status") != status:
             continue
         sessions.append(entry)

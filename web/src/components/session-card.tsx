@@ -33,11 +33,11 @@ export function SessionCard({
       <CardContent className="space-y-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Cpu className="h-3 w-3" />
-          {session.model}
+          {session.model || "—"}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <FolderGit2 className="h-3 w-3" />
-          {session.project_path.split("/").pop()}
+          {session.project_path?.split("/").pop() || "—"}
         </div>
         {session.interactive && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
