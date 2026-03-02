@@ -2,7 +2,7 @@ import logging
 
 from fastapi import FastAPI
 
-from app.routers import repos, sessions
+from app.routers import repos, run
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -11,7 +11,7 @@ logging.basicConfig(
 
 app = FastAPI(title="DooHub Slave", version="1.0.0")
 
-app.include_router(sessions.router)
+app.include_router(run.router)
 app.include_router(repos.router)
 
 

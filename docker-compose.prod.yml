@@ -22,7 +22,6 @@ services:
     env_file: .env.slave
     restart: unless-stopped
     volumes:
-      - slave-data:/data
       - slave-projects:/projects
       - slave-claude:/home/claude/.claude
     networks:
@@ -49,6 +48,5 @@ networks:
 
 volumes:
   pgdata:
-  slave-data:
   slave-projects:
   slave-claude:

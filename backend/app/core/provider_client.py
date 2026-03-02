@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class ProviderClient:
-    """HTTP client that proxies requests to the dooslave provider API."""
+    """HTTP client that proxies requests to the slave service."""
 
     def __init__(self) -> None:
         self.base_url = settings.provider_url.rstrip("/")
@@ -25,31 +25,16 @@ class ProviderClient:
             timeout=httpx.Timeout(300.0, connect=10.0),
         )
 
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        **kwargs: Any,
-    ) -> Any:
-        """Make an HTTP request to the provider and return parsed JSON."""
+    async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
             async with self._client() as client:
                 resp = await client.request(method, path, **kwargs)
         except httpx.ConnectError:
-            logger.error("Provider unreachable at %s", self.base_url)
-            raise HTTPException(
-                status_code=502, detail="Provider service is unreachable"
-            )
+            raise HTTPException(status_code=502, detail="Slave service is unreachable")
         except httpx.TimeoutException:
-            logger.error("Provider request timed out: %s %s", method, path)
-            raise HTTPException(
-                status_code=504, detail="Provider request timed out"
-            )
+            raise HTTPException(status_code=504, detail="Slave request timed out")
         except httpx.HTTPError as exc:
-            logger.error("Provider HTTP error: %s", exc)
-            raise HTTPException(
-                status_code=502, detail=f"Provider error: {exc}"
-            )
+            raise HTTPException(status_code=502, detail=f"Slave error: {exc}")
 
         if resp.status_code >= 400:
             try:
@@ -63,13 +48,7 @@ class ProviderClient:
 
         return resp.json()
 
-    async def _stream_sse(
-        self,
-        method: str,
-        path: str,
-        **kwargs: Any,
-    ) -> AsyncGenerator[dict, None]:
-        """Open an SSE connection to dooslave and yield parsed event dicts."""
+    async def _stream_sse(self, method: str, path: str, **kwargs: Any) -> AsyncGenerator[dict, None]:
         stream_headers = {**self.headers, "Accept": "text/event-stream"}
         try:
             async with httpx.AsyncClient(
@@ -97,66 +76,37 @@ class ProviderClient:
                             except json.JSONDecodeError:
                                 pass
                             event_type = "message"
-                        # skip keepalive comment lines
         except httpx.ConnectError:
-            raise HTTPException(status_code=502, detail="Provider service is unreachable")
+            raise HTTPException(status_code=502, detail="Slave service is unreachable")
         except httpx.HTTPError as exc:
-            raise HTTPException(status_code=502, detail=f"Provider error: {exc}")
+            raise HTTPException(status_code=502, detail=f"Slave error: {exc}")
 
-    # --- Sessions ---
-
-    async def list_sessions(self) -> Any:
-        return await self._request("GET", "/api/sessions")
-
-    async def create_session(
+    async def run(
         self,
-        key: str,
-        model: str = "sonnet",
-        path: str = "/projects",
+        session_key: str,
+        message: str,
+        project_path: str,
+        model: str,
+        claude_session_id: str | None,
         interactive: bool = False,
+        timeout: int = 300,
     ) -> Any:
-        return await self._request(
-            "POST",
-            "/api/sessions",
-            json={
-                "session_key": key,
-                "model": model,
-                "project_path": path,
-                "interactive": interactive,
-            },
-        )
-
-    async def get_session(self, key: str) -> Any:
-        return await self._request("GET", f"/api/sessions/{key}")
-
-    async def delete_session(self, key: str) -> Any:
-        return await self._request("DELETE", f"/api/sessions/{key}")
-
-    async def send_message(self, key: str, content: str) -> Any:
-        return await self._request(
-            "POST",
-            f"/api/sessions/{key}/message",
-            json={"message": content},
-        )
+        return await self._request("POST", "/api/run", json={
+            "session_key": session_key,
+            "message": message,
+            "project_path": project_path,
+            "model": model,
+            "claude_session_id": claude_session_id,
+            "interactive": interactive,
+            "timeout": timeout,
+        })
 
     async def stream_events(self) -> AsyncGenerator[dict, None]:
-        """SSE stream of status events for all sessions."""
-        async for event in self._stream_sse("GET", "/api/sessions/events"):
+        async for event in self._stream_sse("GET", "/api/events"):
             yield event
 
-    async def stream_message(self, key: str, content: str) -> AsyncGenerator[dict, None]:
-        """SSE stream of token/done events for a single session message."""
-        async for event in self._stream_sse(
-            "POST",
-            f"/api/sessions/{key}/message/stream",
-            json={"message": content},
-        ):
-            yield event
-
-    async def cancel_session(self, key: str) -> Any:
-        return await self._request("POST", f"/api/sessions/{key}/cancel")
-
-    # --- Repos ---
+    async def cancel(self, key: str) -> Any:
+        return await self._request("POST", f"/api/cancel/{key}")
 
     async def list_repos(self) -> Any:
         return await self._request("GET", "/api/repos")

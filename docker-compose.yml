@@ -34,7 +34,6 @@ services:
     environment:
       - SLAVE_API_KEY=change-me
     volumes:
-      - slave-data:/data
       - slave-projects:/projects
       - slave-claude:/home/claude/.claude
 
@@ -56,6 +55,5 @@ services:
 
 volumes:
   pgdata:
-  slave-data:
   slave-projects:
   slave-claude:

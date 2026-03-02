@@ -31,13 +31,15 @@ async def create_session(
     db: DBSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await provider.create_session(
-        key=body.session_key,
+    if db.query(Session).filter(Session.session_key == body.session_key).first():
+        raise HTTPException(status_code=409, detail="Session key already exists")
+    session = Session(
+        user_id=user.id,
+        session_key=body.session_key,
+        project_path=body.project_path,
         model=body.model,
-        path=body.project_path,
         interactive=body.interactive,
     )
-    session = Session(user_id=user.id, session_key=body.session_key)
     db.add(session)
     db.commit()
     return {"session_key": body.session_key}
@@ -48,20 +50,34 @@ async def session_events(
     user: User = Depends(get_current_user),
     db: DBSession = Depends(get_db),
 ):
-    """SSE stream of status events filtered to this user's sessions."""
-    user_keys = {
-        s.session_key
-        for s in db.query(Session).filter(Session.user_id == user.id).all()
+    """SSE stream of status events, filtered to this user's sessions."""
+    user_sessions = db.query(Session).filter(Session.user_id == user.id).all()
+    user_keys = {s.session_key for s in user_sessions}
+    session_map = {
+        s.session_key: {
+            "model": s.model,
+            "project_path": s.project_path,
+            "interactive": s.interactive,
+            "claude_session_id": s.claude_session_id,
+        }
+        for s in user_sessions
     }
 
     async def generate():
+        snapshot_sent = False
         async for event in provider.stream_events():
             evt = event.get("event")
-            if evt == "snapshot":
-                # Filter snapshot to only this user's sessions
-                all_sessions = event.get("sessions", {})
-                filtered = {k: v for k, v in all_sessions.items() if k in user_keys}
-                yield f"event: snapshot\ndata: {json.dumps({'sessions': filtered})}\n\n"
+            if evt == "snapshot" and not snapshot_sent:
+                busy_keys = set(event.get("sessions", {}).keys())
+                merged = {
+                    key: {
+                        **session_map[key],
+                        "status": "busy" if key in busy_keys else "idle",
+                    }
+                    for key in user_keys
+                }
+                yield f"event: snapshot\ndata: {json.dumps({'sessions': merged})}\n\n"
+                snapshot_sent = True
             elif evt == "status" and event.get("session_key") in user_keys:
                 yield f"event: status\ndata: {json.dumps(event)}\n\n"
 
@@ -74,27 +90,22 @@ async def list_sessions(
     db: DBSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    data = await provider.list_sessions()
-    provider_sessions = data.get("sessions", {})
-
-    local = db.query(Session).filter(Session.user_id == user.id).all()
-    sessions = []
-    for s in local:
-        info = provider_sessions.get(s.session_key, {})
-        entry = {
+    sessions = db.query(Session).filter(Session.user_id == user.id).all()
+    result = [
+        {
             "session_key": s.session_key,
             "created_at": s.created_at.isoformat(),
             "status": "idle",
-            "model": "",
-            "project_path": "",
-            "interactive": False,
-            "claude_session_id": None,
-            **info,
+            "model": s.model,
+            "project_path": s.project_path,
+            "interactive": s.interactive,
+            "claude_session_id": s.claude_session_id,
         }
-        if status and entry.get("status") != status:
-            continue
-        sessions.append(entry)
-    return {"sessions": sessions, "total": len(sessions)}
+        for s in sessions
+    ]
+    if status:
+        result = [s for s in result if s["status"] == status]
+    return {"sessions": result, "total": len(result)}
 
 
 @router.get("/sessions/{session_key}")
@@ -108,7 +119,15 @@ async def get_session(
     ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return await provider.get_session(session_key)
+    return {
+        "session_key": session.session_key,
+        "status": "idle",
+        "model": session.model,
+        "project_path": session.project_path,
+        "interactive": session.interactive,
+        "claude_session_id": session.claude_session_id,
+        "created_at": session.created_at.isoformat(),
+    }
 
 
 @router.delete("/sessions/{session_key}", status_code=204)
@@ -122,7 +141,6 @@ async def delete_session(
     ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    await provider.delete_session(session_key)
     db.delete(session)
     db.commit()
 
@@ -143,66 +161,42 @@ async def send_message(
     db.add(SessionMessage(session_id=session.id, role="user", content=body.content))
     db.commit()
 
-    result = await provider.send_message(session_key, body.content)
+    result = await provider.run(
+        session_key=session_key,
+        message=body.content,
+        project_path=session.project_path,
+        model=session.model,
+        claude_session_id=session.claude_session_id,
+        interactive=session.interactive,
+    )
 
     response_text = result.get("result") or result.get("error") or ""
+    new_claude_sid = result.get("session_id")
+    if new_claude_sid:
+        session.claude_session_id = new_claude_sid
     db.add(SessionMessage(session_id=session.id, role="assistant", content=response_text))
     db.commit()
 
     return {
         "role": "assistant",
         "content": response_text,
-        "session_id": result.get("session_id"),
+        "session_id": new_claude_sid,
         "cost_usd": result.get("cost_usd"),
     }
-
-
-@router.post("/sessions/{session_key}/messages/stream")
-async def send_message_stream(
-    session_key: str,
-    body: SendMessageRequest,
-    db: DBSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """SSE endpoint — streams tokens as Claude responds, saves to DB on done."""
-    session = db.query(Session).filter(
-        Session.session_key == session_key, Session.user_id == user.id
-    ).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    db.add(SessionMessage(session_id=session.id, role="user", content=body.content))
-    db.commit()
-    session_id = session.id  # capture before leaving thread
-
-    async def generate():
-        result_text = ""
-        async for event in provider.stream_message(session_key, body.content):
-            evt = event.get("event")
-            if evt == "token":
-                result_text += event.get("token", "")
-            elif evt == "done":
-                result_text = event.get("result", result_text)
-                # Persist assistant message
-                from app.core.database import SessionLocal
-                with SessionLocal() as save_db:
-                    save_db.add(SessionMessage(
-                        session_id=session_id,
-                        role="assistant",
-                        content=result_text,
-                    ))
-                    save_db.commit()
-            yield f"event: {evt}\ndata: {json.dumps(event)}\n\n"
-
-    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.post("/sessions/{session_key}/cancel")
 async def cancel_session(
     session_key: str,
-    _user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    return await provider.cancel_session(session_key)
+    session = db.query(Session).filter(
+        Session.session_key == session_key, Session.user_id == user.id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return await provider.cancel(session_key)
 
 
 @router.get("/sessions/{session_key}/history")
