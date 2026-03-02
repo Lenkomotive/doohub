@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../bloc/auth/auth_bloc.dart';
+import '../bloc/auth/auth_event.dart';
 import '../bloc/theme/theme_cubit.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -24,6 +26,15 @@ class SettingsScreen extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
               );
             },
+          ),
+          const SizedBox(height: 24),
+          Text('Account', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey)),
+          const SizedBox(height: 4),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Sign out', style: TextStyle(color: Colors.red)),
+            leading: const Icon(Icons.logout, color: Colors.red),
+            onTap: () => context.read<AuthBloc>().add(AuthLogoutRequested()),
           ),
         ],
       ),

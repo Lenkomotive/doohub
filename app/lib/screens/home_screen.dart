@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../services/api.dart';
-import '../bloc/auth/auth_bloc.dart';
-import '../bloc/auth/auth_event.dart';
 import '../bloc/sessions/sessions_cubit.dart';
 import 'sessions_screen.dart';
 import 'settings_screen.dart';
@@ -35,17 +33,10 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
-          onDestinationSelected: (index) {
-            if (index == 2) {
-              context.read<AuthBloc>().add(AuthLogoutRequested());
-              return;
-            }
-            setState(() => _currentIndex = index);
-          },
+          onDestinationSelected: (index) => setState(() => _currentIndex = index),
           destinations: const [
             NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'Sessions'),
             NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
-            NavigationDestination(icon: Icon(Icons.logout), label: 'Logout'),
           ],
         ),
       ),
