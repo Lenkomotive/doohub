@@ -39,6 +39,19 @@ class SessionsCubit extends Cubit<SessionsState> {
     fetchSessions();
   }
 
+  Future<void> createSession({
+    required String sessionKey,
+    required String projectPath,
+    String model = 'sonnet',
+  }) async {
+    await api.createSession(
+      sessionKey: sessionKey,
+      projectPath: projectPath,
+      model: model,
+    );
+    await fetchSessions();
+  }
+
   Future<void> deleteSession(String key) async {
     final updated = state.sessions.where((s) => s.sessionKey != key).toList();
     emit(state.copyWith(sessions: updated, total: state.total - 1));
