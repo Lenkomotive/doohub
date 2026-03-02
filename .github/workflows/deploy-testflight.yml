@@ -110,18 +110,15 @@ jobs:
           <plist version="1.0">
           <dict>
               <key>method</key>
-              <string>app-store</string>
+              <string>app-store-connect</string>
               <key>teamID</key>
               <string>XWG3ZN6SZ9</string>
               <key>uploadSymbols</key>
               <true/>
               <key>signingStyle</key>
-              <string>manual</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.doo.doohub</key>
-                  <string>${PP_NAME}</string>
-              </dict>
+              <string>automatic</string>
+              <key>signingCertificate</key>
+              <string>Apple Distribution</string>
           </dict>
           </plist>
           EOF
