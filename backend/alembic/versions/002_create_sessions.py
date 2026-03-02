@@ -1,4 +1,4 @@
-"""Create session_messages table
+"""Create sessions and session_messages tables
 
 Revision ID: 002
 Revises: 001
@@ -18,9 +18,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.create_table(
+        "sessions",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+        sa.Column("session_key", sa.String(100), unique=True, nullable=False, index=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+    )
+
+    op.create_table(
         "session_messages",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("session_key", sa.String(100), nullable=False, index=True),
+        sa.Column("session_id", sa.Integer(), sa.ForeignKey("sessions.id"), nullable=False),
         sa.Column("role", sa.String(20), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column(
@@ -34,3 +47,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("session_messages")
+    op.drop_table("sessions")
