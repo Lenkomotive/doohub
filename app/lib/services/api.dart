@@ -141,15 +141,6 @@ class ApiService {
     return res.data;
   }
 
-  // Pipelines
-
-  Future<Map<String, dynamic>> getPipelines({String? status}) async {
-    final params = <String, dynamic>{};
-    if (status != null) params['status'] = status;
-    final res = await _dio.get('/pipelines', queryParameters: params);
-    return res.data;
-  }
-
   // Repos
 
   Future<Map<String, dynamic>> getRepos() async {
