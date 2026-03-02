@@ -5,6 +5,7 @@ import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
 import '../bloc/sessions/sessions_cubit.dart';
 import 'sessions_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,13 +29,14 @@ class _HomeScreenState extends State<HomeScreen> {
             index: _currentIndex,
             children: const [
               SessionsScreen(),
+              SettingsScreen(),
             ],
           ),
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
           onDestinationSelected: (index) {
-            if (index == 1) {
+            if (index == 2) {
               context.read<AuthBloc>().add(AuthLogoutRequested());
               return;
             }
@@ -42,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           destinations: const [
             NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'Sessions'),
+            NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
             NavigationDestination(icon: Icon(Icons.logout), label: 'Logout'),
           ],
         ),
