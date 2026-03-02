@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   MessageSquare,
-  GitBranch,
   FolderGit2,
   CircleDot,
   LogOut,
@@ -16,7 +15,6 @@ import { useAuthStore } from "@/store/auth";
 
 const navItems = [
   { href: "/sessions", label: "Sessions", icon: MessageSquare },
-  { href: "/pipelines", label: "Pipelines", icon: GitBranch },
   { href: "/repos", label: "Repos", icon: FolderGit2, disabled: true },
   { href: "/issues", label: "Issues", icon: CircleDot, disabled: true },
 ];
