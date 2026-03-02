@@ -4,19 +4,46 @@ import '../models/session.dart';
 import '../services/api.dart';
 import '../bloc/sessions/sessions_cubit.dart';
 import '../bloc/sessions/sessions_state.dart';
-import '../bloc/chat/chat_cubit.dart';
 import 'chat_screen.dart';
 
 class SessionsScreen extends StatelessWidget {
   const SessionsScreen({super.key});
 
+  void _openChat(BuildContext context, Session session) {
+    final sessionsCubit = context.read<SessionsCubit>();
+
+    // Fetch history if not loaded yet
+    if (session.chatStatus == ChatStatus.initial) {
+      sessionsCubit.fetchHistory(session.sessionKey);
+    }
+
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => BlocProvider.value(
+        value: sessionsCubit,
+        child: ChatScreen(sessionKey: session.sessionKey),
+      ),
+    ));
+  }
+
   void _showCreateSheet(BuildContext context) {
-    final cubit = context.read<SessionsCubit>();
+    final sessionsCubit = context.read<SessionsCubit>();
     final api = context.read<ApiService>();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _CreateSessionSheet(api: api, cubit: cubit),
+      builder: (_) => _CreateSessionSheet(
+        api: api,
+        cubit: sessionsCubit,
+        onCreated: (sessionKey) {
+          sessionsCubit.fetchHistory(sessionKey);
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => BlocProvider.value(
+              value: sessionsCubit,
+              child: ChatScreen(sessionKey: sessionKey),
+            ),
+          ));
+        },
+      ),
     );
   }
 
@@ -24,7 +51,7 @@ class SessionsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<SessionsCubit, SessionsState>(
       builder: (context, state) {
-        final cubit = context.read<SessionsCubit>();
+        final sessionsCubit = context.read<SessionsCubit>();
 
         return Stack(
           children: [
@@ -36,8 +63,6 @@ class SessionsScreen extends StatelessWidget {
                   child: Row(
                     children: [
                       Text('Sessions', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      Text('(${state.total})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
                     ],
                   ),
                 ),
@@ -58,7 +83,7 @@ class SessionsScreen extends StatelessWidget {
                               ),
                             )
                           : RefreshIndicator(
-                              onRefresh: cubit.fetchSessions,
+                              onRefresh: sessionsCubit.fetchSessions,
                               child: ListView.builder(
                                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
                                 itemCount: state.sessions.length,
@@ -66,16 +91,8 @@ class SessionsScreen extends StatelessWidget {
                                   final session = state.sessions[index];
                                   return _SessionTile(
                                     session: session,
-                                    onTap: () {
-                                      final api = context.read<ApiService>();
-                                      Navigator.of(context).push(MaterialPageRoute(
-                                        builder: (_) => BlocProvider(
-                                          create: (_) => ChatCubit(api: api, sessionKey: session.sessionKey),
-                                          child: ChatScreen(sessionKey: session.sessionKey),
-                                        ),
-                                      ));
-                                    },
-                                    onDelete: () => cubit.deleteSession(session.sessionKey),
+                                    onTap: () => _openChat(context, session),
+                                    onDelete: () => sessionsCubit.deleteSession(session.sessionKey),
                                   );
                                 },
                               ),
@@ -103,31 +120,34 @@ class SessionsScreen extends StatelessWidget {
 class _CreateSessionSheet extends StatefulWidget {
   final ApiService api;
   final SessionsCubit cubit;
+  final void Function(String sessionKey) onCreated;
 
-  const _CreateSessionSheet({required this.api, required this.cubit});
+  const _CreateSessionSheet({required this.api, required this.cubit, required this.onCreated});
 
   @override
   State<_CreateSessionSheet> createState() => _CreateSessionSheetState();
 }
 
 class _CreateSessionSheetState extends State<_CreateSessionSheet> {
-  final _nameController = TextEditingController();
   List<String> _repos = [];
   String _selectedProject = '';
-  String _selectedModel = 'sonnet';
+  String _selectedModel = 'opus';
   bool _loading = false;
   bool _loadingRepos = true;
+
+  String _nextName() {
+    final existing = widget.cubit.state.sessions.map((s) => s.name).toSet();
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    for (final c in chars.split('')) {
+      if (!existing.contains(c)) return c;
+    }
+    return chars[existing.length % chars.length];
+  }
 
   @override
   void initState() {
     super.initState();
     _loadRepos();
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadRepos() async {
@@ -141,13 +161,13 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   }
 
   Future<void> _submit() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) return;
-
     setState(() => _loading = true);
     try {
-      await widget.cubit.createSession(name: name, projectPath: _selectedProject, model: _selectedModel);
-      if (mounted) Navigator.of(context).pop();
+      final key = await widget.cubit.createSession(name: _nextName(), projectPath: _selectedProject, model: _selectedModel);
+      if (mounted) {
+        Navigator.of(context).pop();
+        widget.onCreated(key);
+      }
     } catch (_) {
       setState(() => _loading = false);
     }
@@ -168,12 +188,6 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
         children: [
           Text('New Session', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
-          TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Session name', border: OutlineInputBorder()),
-            textInputAction: TextInputAction.next,
-          ),
-          const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _selectedModel,
             decoration: const InputDecoration(labelText: 'Model', border: OutlineInputBorder()),
@@ -260,7 +274,7 @@ class _SessionTile extends StatelessWidget {
                 ),
               ],
             ),
-            trailing: _StatusBadge(status: session.status),
+            trailing: _StatusBadge(status: session.sending ? 'busy' : session.status),
           ),
         ),
       ),

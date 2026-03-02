@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/session.dart';
-import '../bloc/chat/chat_cubit.dart';
-import '../bloc/chat/chat_state.dart';
+import '../models/message.dart';
+import '../bloc/sessions/sessions_cubit.dart';
+import '../bloc/sessions/sessions_state.dart';
 
 class ChatScreen extends StatefulWidget {
   final String sessionKey;
@@ -40,17 +41,29 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
     _inputController.clear();
-    context.read<ChatCubit>().sendMessage(text);
+    context.read<SessionsCubit>().sendMessage(widget.sessionKey, text);
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<ChatCubit, ChatState>(
-      listenWhen: (prev, curr) => prev.messages.length != curr.messages.length,
-      listener: (context, state) => _scrollToBottom(),
-      builder: (context, state) {
-        final cubit = context.read<ChatCubit>();
-        final status = state.sending ? 'busy' : (state.session?['status'] as String? ?? 'idle');
+    return BlocSelector<SessionsCubit, SessionsState, Session?>(
+      selector: (state) => state.sessionByKey(widget.sessionKey),
+      builder: (context, session) {
+        if (session == null) {
+          return const Scaffold(body: Center(child: Text('Session not found')));
+        }
+
+        final cubit = context.read<SessionsCubit>();
+        final status = session.sending ? 'busy' : session.status;
+        final messages = session.messages;
+
+        // Auto-scroll when near bottom
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients &&
+              _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 100) {
+            _scrollToBottom();
+          }
+        });
 
         return Scaffold(
           appBar: AppBar(
@@ -60,7 +73,7 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Row(
                   children: [
-                    Text(state.session?['name'] as String? ?? widget.sessionKey, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                    Text(session.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -79,23 +92,22 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ],
                 ),
-                if (state.session != null)
-                  Text(
-                    '${state.session!['model'] ?? ''} · ${(state.session!['project_path'] ?? '').toString().split('/').last}',
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
+                Text(
+                  '${session.model} · ${session.projectPath.split('/').last}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
               ],
             ),
             actions: [
               if (status == 'busy')
                 IconButton(
                   icon: const Icon(Icons.cancel_outlined, size: 20),
-                  onPressed: cubit.cancelSession,
+                  onPressed: () => cubit.cancelSession(widget.sessionKey),
                 ),
               IconButton(
                 icon: Icon(Icons.delete_outline, size: 20, color: Theme.of(context).colorScheme.error),
                 onPressed: () async {
-                  await cubit.deleteSession();
+                  await cubit.deleteSession(widget.sessionKey);
                   if (context.mounted) Navigator.of(context).pop();
                 },
               ),
@@ -103,16 +115,15 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           body: Column(
             children: [
-              // Messages
               Expanded(
-                child: state.messages.isEmpty && !state.sending
+                child: messages.isEmpty && !session.sending
                     ? const Center(child: Text('Send a message to start', style: TextStyle(color: Colors.grey)))
                     : ListView.builder(
                         controller: _scrollController,
                         padding: const EdgeInsets.all(12),
-                        itemCount: state.messages.length + (state.sending ? 1 : 0),
+                        itemCount: messages.length + (session.sending ? 1 : 0),
                         itemBuilder: (context, index) {
-                          if (index == state.messages.length) {
+                          if (index == messages.length) {
                             return const Align(
                               alignment: Alignment.centerLeft,
                               child: Padding(
@@ -121,12 +132,11 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                             );
                           }
-                          return _MessageBubble(message: state.messages[index]);
+                          return _MessageBubble(message: messages[index]);
                         },
                       ),
               ),
 
-              // Input
               Container(
                 padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
                 decoration: BoxDecoration(
@@ -156,7 +166,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           isDense: true,
                         ),
-                        enabled: !state.sending,
+                        enabled: !session.sending,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -164,7 +174,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       height: 40,
                       width: 40,
                       child: IconButton.filled(
-                        onPressed: state.sending ? null : _sendMessage,
+                        onPressed: session.sending ? null : _sendMessage,
                         icon: const Icon(Icons.send, size: 18),
                         padding: EdgeInsets.zero,
                       ),

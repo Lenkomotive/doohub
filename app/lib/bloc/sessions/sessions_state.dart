@@ -16,6 +16,13 @@ class SessionsState extends Equatable {
     this.status = SessionsStatus.loading,
   });
 
+  Session? sessionByKey(String key) {
+    for (final s in sessions) {
+      if (s.sessionKey == key) return s;
+    }
+    return null;
+  }
+
   SessionsState copyWith({
     List<Session>? sessions,
     int? total,

@@ -1,3 +1,7 @@
+import 'message.dart';
+
+enum ChatStatus { initial, loading, loaded, error }
+
 class Session {
   final String sessionKey;
   final String name;
@@ -6,6 +10,9 @@ class Session {
   final String projectPath;
   final String? claudeSessionId;
   final bool interactive;
+  final List<Message> messages;
+  final bool sending;
+  final ChatStatus chatStatus;
 
   Session({
     required this.sessionKey,
@@ -15,6 +22,9 @@ class Session {
     required this.projectPath,
     this.claudeSessionId,
     required this.interactive,
+    this.messages = const [],
+    this.sending = false,
+    this.chatStatus = ChatStatus.initial,
   });
 
   factory Session.fromJson(Map<String, dynamic> json) {
@@ -28,27 +38,24 @@ class Session {
       interactive: json['interactive'] ?? false,
     );
   }
-}
 
-class Message {
-  final int id;
-  final String role;
-  final String content;
-  final DateTime createdAt;
-
-  Message({
-    required this.id,
-    required this.role,
-    required this.content,
-    required this.createdAt,
-  });
-
-  factory Message.fromJson(Map<String, dynamic> json) {
-    return Message(
-      id: json['id'],
-      role: json['role'],
-      content: json['content'],
-      createdAt: DateTime.parse(json['created_at']),
+  Session copyWith({
+    String? status,
+    List<Message>? messages,
+    bool? sending,
+    ChatStatus? chatStatus,
+  }) {
+    return Session(
+      sessionKey: sessionKey,
+      name: name,
+      status: status ?? this.status,
+      model: model,
+      projectPath: projectPath,
+      claudeSessionId: claudeSessionId,
+      interactive: interactive,
+      messages: messages ?? this.messages,
+      sending: sending ?? this.sending,
+      chatStatus: chatStatus ?? this.chatStatus,
     );
   }
 }
