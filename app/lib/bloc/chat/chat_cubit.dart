@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/session.dart';
 import '../../services/api.dart';
@@ -7,7 +6,6 @@ import 'chat_state.dart';
 class ChatCubit extends Cubit<ChatState> {
   final ApiService api;
   final String sessionKey;
-  StreamSubscription<Map<String, dynamic>>? _streamSub;
 
   ChatCubit({required this.api, required this.sessionKey})
       : super(const ChatState()) {
@@ -40,7 +38,7 @@ class ChatCubit extends Cubit<ChatState> {
   Future<void> sendMessage(String content) async {
     if (content.isEmpty || state.sending) return;
 
-    final optimistic = Message(
+    final userMsg = Message(
       id: DateTime.now().millisecondsSinceEpoch,
       role: 'user',
       content: content,
@@ -48,62 +46,28 @@ class ChatCubit extends Cubit<ChatState> {
     );
 
     emit(state.copyWith(
-      messages: [...state.messages, optimistic],
+      messages: [...state.messages, userMsg],
       sending: true,
-      streamingContent: '',
     ));
 
-    // Add a placeholder assistant bubble that will fill with tokens
-    final streamingMsg = Message(
-      id: DateTime.now().millisecondsSinceEpoch + 1,
-      role: 'assistant',
-      content: '',
-      createdAt: DateTime.now(),
-    );
-    emit(state.copyWith(
-      messages: [...state.messages, streamingMsg],
-    ));
-
-    _streamSub?.cancel();
-    _streamSub = api.streamMessage(sessionKey, content).listen(
-      (event) {
-        final evt = event['event'] as String?;
-        if (evt == 'token') {
-          final token = event['token'] as String? ?? '';
-          final current = state.streamingContent + token;
-          final msgs = List<Message>.from(state.messages);
-          msgs[msgs.length - 1] = Message(
-            id: streamingMsg.id,
-            role: 'assistant',
-            content: current,
-            createdAt: streamingMsg.createdAt,
-          );
-          emit(state.copyWith(messages: msgs, streamingContent: current));
-        } else if (evt == 'done') {
-          final result = event['result'] as String? ?? state.streamingContent;
-          final msgs = List<Message>.from(state.messages);
-          msgs[msgs.length - 1] = Message(
-            id: streamingMsg.id,
-            role: 'assistant',
-            content: result,
-            createdAt: streamingMsg.createdAt,
-          );
-          emit(state.copyWith(
-            messages: msgs,
-            sending: false,
-            streamingContent: '',
-          ));
-          fetchSession();
-        } else if (evt == 'error') {
-          emit(state.copyWith(sending: false, streamingContent: ''));
-          fetchHistory();
-        }
-      },
-      onError: (_) {
-        emit(state.copyWith(sending: false, streamingContent: ''));
-        fetchHistory();
-      },
-    );
+    try {
+      final data = await api.sendMessage(sessionKey, content);
+      final responseText = data['content'] as String? ?? '';
+      final assistantMsg = Message(
+        id: DateTime.now().millisecondsSinceEpoch,
+        role: 'assistant',
+        content: responseText,
+        createdAt: DateTime.now(),
+      );
+      emit(state.copyWith(
+        messages: [...state.messages, assistantMsg],
+        sending: false,
+      ));
+      fetchSession();
+    } catch (_) {
+      emit(state.copyWith(sending: false));
+      fetchHistory();
+    }
   }
 
   Future<void> cancelSession() async {
@@ -116,8 +80,5 @@ class ChatCubit extends Cubit<ChatState> {
   }
 
   @override
-  Future<void> close() {
-    _streamSub?.cancel();
-    return super.close();
-  }
+  Future<void> close() => super.close();
 }
