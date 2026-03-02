@@ -1,4 +1,6 @@
+import json
 import logging
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
@@ -29,10 +31,7 @@ class ProviderClient:
         path: str,
         **kwargs: Any,
     ) -> Any:
-        """Make an HTTP request to the provider and return parsed JSON.
-
-        Raises HTTPException with appropriate status on failure.
-        """
+        """Make an HTTP request to the provider and return parsed JSON."""
         try:
             async with self._client() as client:
                 resp = await client.request(method, path, **kwargs)
@@ -53,18 +52,56 @@ class ProviderClient:
             )
 
         if resp.status_code >= 400:
-            # Forward the provider's error to the caller
             try:
                 detail = resp.json().get("detail", resp.text)
             except Exception:
                 detail = resp.text
             raise HTTPException(status_code=resp.status_code, detail=detail)
 
-        # 204 No Content
         if resp.status_code == 204:
             return None
 
         return resp.json()
+
+    async def _stream_sse(
+        self,
+        method: str,
+        path: str,
+        **kwargs: Any,
+    ) -> AsyncGenerator[dict, None]:
+        """Open an SSE connection to dooslave and yield parsed event dicts."""
+        stream_headers = {**self.headers, "Accept": "text/event-stream"}
+        try:
+            async with httpx.AsyncClient(
+                base_url=self.base_url,
+                headers=stream_headers,
+                timeout=httpx.Timeout(None, connect=10.0),
+            ) as client:
+                async with client.stream(method, path, **kwargs) as resp:
+                    if resp.status_code >= 400:
+                        body = await resp.aread()
+                        try:
+                            detail = json.loads(body).get("detail", body.decode())
+                        except Exception:
+                            detail = body.decode()
+                        raise HTTPException(status_code=resp.status_code, detail=detail)
+
+                    event_type = "message"
+                    async for raw_line in resp.aiter_lines():
+                        if raw_line.startswith("event:"):
+                            event_type = raw_line[len("event:"):].strip()
+                        elif raw_line.startswith("data:"):
+                            data_str = raw_line[len("data:"):].strip()
+                            try:
+                                yield {"event": event_type, **json.loads(data_str)}
+                            except json.JSONDecodeError:
+                                pass
+                            event_type = "message"
+                        # skip keepalive comment lines
+        except httpx.ConnectError:
+            raise HTTPException(status_code=502, detail="Provider service is unreachable")
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail=f"Provider error: {exc}")
 
     # --- Sessions ---
 
@@ -101,6 +138,20 @@ class ProviderClient:
             f"/api/sessions/{key}/message",
             json={"message": content},
         )
+
+    async def stream_events(self) -> AsyncGenerator[dict, None]:
+        """SSE stream of status events for all sessions."""
+        async for event in self._stream_sse("GET", "/api/sessions/events"):
+            yield event
+
+    async def stream_message(self, key: str, content: str) -> AsyncGenerator[dict, None]:
+        """SSE stream of token/done events for a single session message."""
+        async for event in self._stream_sse(
+            "POST",
+            f"/api/sessions/{key}/message/stream",
+            json={"message": content},
+        ):
+            yield event
 
     async def cancel_session(self, key: str) -> Any:
         return await self._request("POST", f"/api/sessions/{key}/cancel")

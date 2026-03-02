@@ -1,4 +1,7 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.auth import get_current_user
@@ -40,17 +43,40 @@ async def create_session(
     return {"session_key": body.session_key}
 
 
+@router.get("/sessions/events")
+async def session_events(
+    user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    """SSE stream of status events filtered to this user's sessions."""
+    user_keys = {
+        s.session_key
+        for s in db.query(Session).filter(Session.user_id == user.id).all()
+    }
+
+    async def generate():
+        async for event in provider.stream_events():
+            evt = event.get("event")
+            if evt == "snapshot":
+                # Filter snapshot to only this user's sessions
+                all_sessions = event.get("sessions", {})
+                filtered = {k: v for k, v in all_sessions.items() if k in user_keys}
+                yield f"event: snapshot\ndata: {json.dumps({'sessions': filtered})}\n\n"
+            elif evt == "status" and event.get("session_key") in user_keys:
+                yield f"event: status\ndata: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
 @router.get("/sessions")
 async def list_sessions(
     status: str | None = Query(None),
     db: DBSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    # Get provider status for all sessions
     data = await provider.list_sessions()
     provider_sessions = data.get("sessions", {})
 
-    # Only return sessions belonging to this user
     local = db.query(Session).filter(Session.user_id == user.id).all()
     sessions = []
     for s in local:
@@ -129,6 +155,46 @@ async def send_message(
         "session_id": result.get("session_id"),
         "cost_usd": result.get("cost_usd"),
     }
+
+
+@router.post("/sessions/{session_key}/messages/stream")
+async def send_message_stream(
+    session_key: str,
+    body: SendMessageRequest,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """SSE endpoint — streams tokens as Claude responds, saves to DB on done."""
+    session = db.query(Session).filter(
+        Session.session_key == session_key, Session.user_id == user.id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    db.add(SessionMessage(session_id=session.id, role="user", content=body.content))
+    db.commit()
+    session_id = session.id  # capture before leaving thread
+
+    async def generate():
+        result_text = ""
+        async for event in provider.stream_message(session_key, body.content):
+            evt = event.get("event")
+            if evt == "token":
+                result_text += event.get("token", "")
+            elif evt == "done":
+                result_text = event.get("result", result_text)
+                # Persist assistant message
+                from app.core.database import SessionLocal
+                with SessionLocal() as save_db:
+                    save_db.add(SessionMessage(
+                        session_id=session_id,
+                        role="assistant",
+                        content=result_text,
+                    ))
+                    save_db.commit()
+            yield f"event: {evt}\ndata: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.post("/sessions/{session_key}/cancel")
