@@ -30,7 +30,7 @@ class ChatCubit extends Cubit<ChatState> {
           liveStatus = event['status'] as String?;
         }
 
-        if (liveStatus == null) return;
+        if (liveStatus == null || isClosed) return;
 
         // Merge live status into session map
         final updated = {...?state.session, 'status': liveStatus};
@@ -53,7 +53,7 @@ class ChatCubit extends Cubit<ChatState> {
   Future<void> fetchSession() async {
     try {
       final data = await api.getSession(sessionKey);
-      emit(state.copyWith(session: () => data));
+      if (!isClosed) emit(state.copyWith(session: () => data));
     } catch (_) {}
   }
 
@@ -63,12 +63,9 @@ class ChatCubit extends Cubit<ChatState> {
       final messages = (data['messages'] as List)
           .map((e) => Message.fromJson(e))
           .toList();
-      emit(state.copyWith(
-        messages: messages,
-        status: ChatStatus.loaded,
-      ));
+      if (!isClosed) emit(state.copyWith(messages: messages, status: ChatStatus.loaded));
     } catch (_) {
-      emit(state.copyWith(status: ChatStatus.error));
+      if (!isClosed) emit(state.copyWith(status: ChatStatus.error));
     }
   }
 
@@ -89,6 +86,7 @@ class ChatCubit extends Cubit<ChatState> {
 
     try {
       final data = await api.sendMessage(sessionKey, content);
+      if (isClosed) return;
       final responseText = data['content'] as String? ?? '';
       final assistantMsg = Message(
         id: DateTime.now().millisecondsSinceEpoch,
@@ -102,7 +100,7 @@ class ChatCubit extends Cubit<ChatState> {
       ));
       fetchSession();
     } catch (_) {
-      emit(state.copyWith(sending: false));
+      if (!isClosed) emit(state.copyWith(sending: false));
       fetchHistory();
     }
   }
