@@ -10,5 +10,5 @@ export default function Home() {
     router.replace("/sessions");
   }, [router]);
 
-  return null;
+  return null; // test vercel deploy on PR merge
 }
