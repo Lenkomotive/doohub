@@ -15,6 +15,5 @@ This is a monorepo containing:
   - `app` — Flutter mobile app
   - `web` — Next.js frontend
   - `backend` — FastAPI backend
-  - `enhancement` — New feature or request
-  - `bug` — Something isn't working
+  - `general` — Something general for this project
 
