@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../widgets/glass.dart';
 import '../services/api.dart';
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
@@ -32,22 +31,19 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        bottomNavigationBar: GlassBar(
-          child: NavigationBar(
-            backgroundColor: Colors.transparent,
-            selectedIndex: _currentIndex,
-            onDestinationSelected: (index) {
-              if (index == 1) {
-                context.read<AuthBloc>().add(AuthLogoutRequested());
-                return;
-              }
-              setState(() => _currentIndex = index);
-            },
-            destinations: const [
-              NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'Sessions'),
-              NavigationDestination(icon: Icon(Icons.logout), label: 'Logout'),
-            ],
-          ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (index) {
+            if (index == 1) {
+              context.read<AuthBloc>().add(AuthLogoutRequested());
+              return;
+            }
+            setState(() => _currentIndex = index);
+          },
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'Sessions'),
+            NavigationDestination(icon: Icon(Icons.logout), label: 'Logout'),
+          ],
         ),
       ),
     );

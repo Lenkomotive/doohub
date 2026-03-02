@@ -5,7 +5,6 @@ import '../services/api.dart';
 import '../bloc/sessions/sessions_cubit.dart';
 import '../bloc/sessions/sessions_state.dart';
 import '../bloc/chat/chat_cubit.dart';
-import '../widgets/glass.dart';
 import 'chat_screen.dart';
 
 class SessionsScreen extends StatelessWidget {
@@ -20,9 +19,10 @@ class SessionsScreen extends StatelessWidget {
   void _showCreateSheet(BuildContext context) {
     final cubit = context.read<SessionsCubit>();
     final api = context.read<ApiService>();
-    showGlassSheet(
+    showModalBottomSheet(
       context: context,
-      child: _CreateSessionSheet(api: api, cubit: cubit),
+      isScrollControlled: true,
+      builder: (_) => _CreateSessionSheet(api: api, cubit: cubit),
     );
   }
 
@@ -32,18 +32,18 @@ class SessionsScreen extends StatelessWidget {
       builder: (context, state) {
         final cubit = context.read<SessionsCubit>();
 
-        return GlassScreenLayer(
-          child: SafeArea(
-            child: Column(
+        return Stack(
+          children: [
+            Column(
               children: [
                 // Header
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                   child: Row(
                     children: [
-                      const Text('Sessions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white)),
+                      Text('Sessions', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500)),
                       const SizedBox(width: 8),
-                      Text('(${state.total})', style: const TextStyle(color: Colors.grey)),
+                      Text('(${state.total})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
                       const Spacer(),
                       ...(_filters.map((f) => Padding(
                         padding: const EdgeInsets.only(left: 2),
@@ -55,11 +55,6 @@ class SessionsScreen extends StatelessWidget {
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                       ))),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.add, color: Colors.white),
-                        onPressed: () => _showCreateSheet(context),
-                      ),
                     ],
                   ),
                 ),
@@ -82,7 +77,7 @@ class SessionsScreen extends StatelessWidget {
                           : RefreshIndicator(
                               onRefresh: cubit.fetchSessions,
                               child: ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+                                padding: const EdgeInsets.fromLTRB(20, 0, 20, 80),
                                 itemCount: state.sessions.length,
                                 itemBuilder: (context, index) {
                                   final session = state.sessions[index];
@@ -105,7 +100,17 @@ class SessionsScreen extends StatelessWidget {
                 ),
               ],
             ),
-          ),
+
+            // FAB
+            Positioned(
+              bottom: 20,
+              right: 20,
+              child: FloatingActionButton(
+                onPressed: () => _showCreateSheet(context),
+                child: const Icon(Icons.add),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -227,41 +232,36 @@ class _SessionTile extends StatelessWidget {
           ),
           child: const Icon(Icons.delete_outline, color: Colors.white),
         ),
-        child: GestureDetector(
-          onTap: onTap,
-          child: GlassCard(
-            child: Row(
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: ListTile(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onTap: onTap,
+            title: Text(session.sessionKey, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(session.sessionKey, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.white)),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.memory, size: 12, color: Colors.grey),
-                          const SizedBox(width: 4),
-                          Text(session.model, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                          const SizedBox(width: 12),
-                          const Icon(Icons.folder_outlined, size: 12, color: Colors.grey),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              session.projectPath.isNotEmpty ? session.projectPath.split('/').last : '—',
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.memory, size: 12, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(session.model, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _StatusBadge(status: session.status),
+                Row(
+                  children: [
+                    const Icon(Icons.folder_outlined, size: 12, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(
+                      session.projectPath.split('/').last,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
               ],
             ),
+            trailing: _StatusBadge(status: session.status),
           ),
         ),
       ),
