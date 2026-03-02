@@ -4,9 +4,7 @@ import '../services/api.dart';
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/auth/auth_event.dart';
 import '../bloc/sessions/sessions_cubit.dart';
-import '../bloc/pipelines/pipelines_cubit.dart';
 import 'sessions_screen.dart';
-import 'pipelines_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,25 +20,21 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final api = context.read<ApiService>();
 
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider(create: (_) => SessionsCubit(api)),
-        BlocProvider(create: (_) => PipelinesCubit(api)),
-      ],
+    return BlocProvider(
+      create: (_) => SessionsCubit(api),
       child: Scaffold(
         body: SafeArea(
           child: IndexedStack(
             index: _currentIndex,
             children: const [
               SessionsScreen(),
-              PipelinesScreen(),
             ],
           ),
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _currentIndex,
           onDestinationSelected: (index) {
-            if (index == 2) {
+            if (index == 1) {
               context.read<AuthBloc>().add(AuthLogoutRequested());
               return;
             }
@@ -48,7 +42,6 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           destinations: const [
             NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'Sessions'),
-            NavigationDestination(icon: Icon(Icons.account_tree_outlined), selectedIcon: Icon(Icons.account_tree), label: 'Pipelines'),
             NavigationDestination(icon: Icon(Icons.logout), label: 'Logout'),
           ],
         ),
