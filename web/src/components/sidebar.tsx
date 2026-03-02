@@ -8,6 +8,7 @@ import {
   CircleDot,
   LogOut,
   Bot,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -61,6 +62,18 @@ export function Sidebar() {
 
         <Separator className="mb-3 w-8" />
 
+        <Link
+          href="/settings"
+          title="Settings"
+          className={`mb-1 flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
+            pathname === "/settings"
+              ? "bg-accent text-accent-foreground active:scale-90"
+              : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground active:scale-90"
+          }`}
+        >
+          <Settings className="h-4 w-4" />
+        </Link>
+
         <Button
           variant="ghost"
           size="icon"
@@ -93,6 +106,17 @@ export function Sidebar() {
             </Link>
           );
         })}
+        <Link
+          href="/settings"
+          className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] transition-all active:scale-90 ${
+            pathname === "/settings"
+              ? "text-primary"
+              : "text-muted-foreground"
+          }`}
+        >
+          <Settings className="h-5 w-5" />
+          Settings
+        </Link>
         <button
           onClick={logout}
           className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] text-muted-foreground transition-all active:scale-90"
