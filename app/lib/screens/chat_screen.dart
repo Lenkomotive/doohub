@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/session.dart';
 import '../bloc/chat/chat_cubit.dart';
 import '../bloc/chat/chat_state.dart';
+import '../widgets/glass.dart';
 
 class ChatScreen extends StatefulWidget {
   final String sessionKey;
@@ -101,78 +102,71 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ],
           ),
-          body: Column(
-            children: [
-              // Messages
-              Expanded(
-                child: state.messages.isEmpty && !state.sending
-                    ? const Center(child: Text('Send a message to start', style: TextStyle(color: Colors.grey)))
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(12),
-                        itemCount: state.messages.length + (state.sending ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == state.messages.length) {
-                            return const Align(
-                              alignment: Alignment.centerLeft,
-                              child: Padding(
-                                padding: EdgeInsets.only(top: 8),
-                                child: _TypingBubble(),
-                              ),
-                            );
-                          }
-                          return _MessageBubble(message: state.messages[index]);
-                        },
-                      ),
-              ),
-
-              // Input
-              Container(
-                padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: Colors.grey.shade800, width: 0.5)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _inputController,
-                        maxLines: 4,
-                        minLines: 1,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _sendMessage(),
-                        decoration: InputDecoration(
-                          hintText: 'Send a message...',
-                          hintStyle: TextStyle(color: Colors.grey.shade600),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(color: Colors.grey.shade700),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(color: Colors.grey.shade700),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          isDense: true,
+          body: GlassScreenLayer(
+            child: Column(
+              children: [
+                // Messages
+                Expanded(
+                  child: state.messages.isEmpty && !state.sending
+                      ? const Center(child: Text('Send a message to start', style: TextStyle(color: Colors.grey)))
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                          itemCount: state.messages.length + (state.sending ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == state.messages.length) {
+                              return const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: _TypingBubble(),
+                                ),
+                              );
+                            }
+                            return _MessageBubble(message: state.messages[index]);
+                          },
                         ),
-                        enabled: !state.sending,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      height: 40,
-                      width: 40,
-                      child: IconButton.filled(
-                        onPressed: state.sending ? null : _sendMessage,
-                        icon: const Icon(Icons.send, size: 18),
-                        padding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ],
                 ),
-              ),
-            ],
+
+                // Glass input bar
+                GlassBar(
+                  padding: EdgeInsets.fromLTRB(12, 10, 12, MediaQuery.of(context).padding.bottom + 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _inputController,
+                          maxLines: 4,
+                          minLines: 1,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _sendMessage(),
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Send a message...',
+                            hintStyle: TextStyle(color: Colors.grey.shade500),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                          ),
+                          enabled: !state.sending,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 36,
+                        width: 36,
+                        child: IconButton.filled(
+                          onPressed: state.sending ? null : _sendMessage,
+                          icon: const Icon(Icons.send, size: 16),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
