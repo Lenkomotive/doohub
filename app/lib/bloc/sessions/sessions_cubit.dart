@@ -9,7 +9,8 @@ class SessionsCubit extends Cubit<SessionsState> {
   StreamSubscription<Map<String, dynamic>>? _eventSub;
 
   SessionsCubit(this.api) : super(const SessionsState()) {
-    _subscribeToEvents();
+    fetchSessions(); // immediate REST load so list shows fast
+    _subscribeToEvents(); // SSE for real-time updates on top
   }
 
   void _subscribeToEvents() {
@@ -67,8 +68,8 @@ class SessionsCubit extends Cubit<SessionsState> {
         }
       },
       onError: (_) {
-        // Reconnect after a short delay on error
-        Future.delayed(const Duration(seconds: 3), _subscribeToEvents);
+        fetchSessions();
+        Future.delayed(const Duration(seconds: 5), _subscribeToEvents);
       },
       onDone: () {
         // Reconnect when stream ends
