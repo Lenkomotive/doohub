@@ -128,10 +128,9 @@ class _CreateSessionSheet extends StatefulWidget {
 }
 
 class _CreateSessionSheetState extends State<_CreateSessionSheet> {
-  final _keyController = TextEditingController();
-  final _pathController = TextEditingController();
+  final _nameController = TextEditingController();
   List<String> _repos = [];
-  String? _selectedRepo;
+  String _selectedProject = '';
   String _selectedModel = 'sonnet';
   bool _loading = false;
   bool _loadingRepos = true;
@@ -140,6 +139,12 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   void initState() {
     super.initState();
     _loadRepos();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRepos() async {
@@ -153,13 +158,12 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   }
 
   Future<void> _submit() async {
-    final name = _keyController.text.trim();
-    final path = _selectedRepo ?? _pathController.text.trim();
-    if (name.isEmpty || path.isEmpty) return;
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
 
     setState(() => _loading = true);
     try {
-      await widget.cubit.createSession(name: name, projectPath: path, model: _selectedModel);
+      await widget.cubit.createSession(name: name, projectPath: _selectedProject, model: _selectedModel);
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
       setState(() => _loading = false);
@@ -168,6 +172,11 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final projectItems = [
+      const DropdownMenuItem<String>(value: '', child: Text('General')),
+      ..._repos.map((r) => DropdownMenuItem(value: r, child: Text(r.split('/').last))),
+    ];
+
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
       child: Column(
@@ -177,7 +186,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
           Text('New Session', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           TextField(
-            controller: _keyController,
+            controller: _nameController,
             decoration: const InputDecoration(labelText: 'Session name', border: OutlineInputBorder()),
             textInputAction: TextInputAction.next,
           ),
@@ -195,17 +204,12 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
           const SizedBox(height: 12),
           if (_loadingRepos)
             const Center(child: CircularProgressIndicator())
-          else if (_repos.isNotEmpty)
-            DropdownButtonFormField<String>(
-              initialValue: _selectedRepo,
-              decoration: const InputDecoration(labelText: 'Project', border: OutlineInputBorder()),
-              items: _repos.map((r) => DropdownMenuItem(value: r, child: Text(r.split('/').last))).toList(),
-              onChanged: (v) => setState(() => _selectedRepo = v),
-            )
           else
-            TextField(
-              controller: _pathController,
-              decoration: const InputDecoration(labelText: 'Project path', border: OutlineInputBorder()),
+            DropdownButtonFormField<String>(
+              value: _selectedProject,
+              decoration: const InputDecoration(labelText: 'Project', border: OutlineInputBorder()),
+              items: projectItems,
+              onChanged: (v) => setState(() => _selectedProject = v ?? ''),
             ),
           const SizedBox(height: 16),
           FilledButton(

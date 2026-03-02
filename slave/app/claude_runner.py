@@ -92,6 +92,14 @@ def _build_cmd(
     return cmd
 
 
+def _resolve_cwd(project_path: str) -> str:
+    p = Path(project_path)
+    if p.is_dir():
+        return str(p)
+    logger.warning("project_path %r does not exist, falling back to home", project_path)
+    return str(Path.home())
+
+
 async def run_prompt(
     prompt: str,
     project_path: str,
@@ -106,13 +114,14 @@ async def run_prompt(
     _sync_claude_md()
     _ensure_claude_config()
     await _git_pull(project_path)
-    logger.info("Running claude in %s", project_path)
+    cwd = _resolve_cwd(project_path)
+    logger.info("Running claude in %s", cwd)
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=project_path,
+        cwd=cwd,
     )
     if session_key:
         _running_procs[session_key] = proc
@@ -158,13 +167,14 @@ async def stream_prompt(
     _sync_claude_md()
     _ensure_claude_config()
     await _git_pull(project_path)
-    logger.info("Streaming claude in %s", project_path)
+    cwd = _resolve_cwd(project_path)
+    logger.info("Streaming claude in %s", cwd)
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=project_path,
+        cwd=cwd,
     )
     if session_key:
         _running_procs[session_key] = proc
