@@ -128,19 +128,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 aiBubbleColor: isDark ? const Color(0xFF1E1E2E) : const Color(0xFFF5F5FF),
                 userBubbleTopLeftRadius: 16,
                 userBubbleTopRightRadius: 16,
-                userBubbleBottomLeftRadius: 16,
-                userBubbleBottomRightRadius: 4,
                 aiBubbleTopLeftRadius: 16,
                 aiBubbleTopRightRadius: 16,
-                aiBubbleBottomLeftRadius: 4,
-                aiBubbleBottomRightRadius: 16,
+                bottomLeftRadius: 16,
+                bottomRightRadius: 16,
               ),
               userTextColor: Theme.of(context).colorScheme.onPrimary,
               aiTextColor: isDark ? Colors.white : Colors.black87,
             ),
             inputOptions: InputOptions(
               sendOnEnter: true,
-              inputDecoration: InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Send a message...',
                 hintStyle: TextStyle(color: Colors.grey.shade600),
                 border: OutlineInputBorder(
