@@ -4,6 +4,7 @@ import '../services/auth_provider.dart';
 import 'package:provider/provider.dart';
 import 'sessions_screen.dart';
 import 'pipelines_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final ApiService api;
@@ -26,13 +27,14 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             SessionsScreen(api: widget.api),
             PipelinesScreen(api: widget.api),
+            const SettingsScreen(),
           ],
         ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
-          if (index == 2) {
+          if (index == 3) {
             // Logout
             context.read<AuthProvider>().logout();
             return;
@@ -42,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'Sessions'),
           NavigationDestination(icon: Icon(Icons.account_tree_outlined), selectedIcon: Icon(Icons.account_tree), label: 'Pipelines'),
+          NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
           NavigationDestination(icon: Icon(Icons.logout), label: 'Logout'),
         ],
       ),

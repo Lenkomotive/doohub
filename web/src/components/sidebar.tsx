@@ -8,6 +8,7 @@ import {
   CircleDot,
   LogOut,
   Bot,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -17,6 +18,7 @@ const navItems = [
   { href: "/sessions", label: "Sessions", icon: MessageSquare },
   { href: "/repos", label: "Repos", icon: FolderGit2, disabled: true },
   { href: "/issues", label: "Issues", icon: CircleDot, disabled: true },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
