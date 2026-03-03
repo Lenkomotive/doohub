@@ -23,6 +23,29 @@ async def list_repos():
     return {"repos": repos}
 
 
+@router.get("/issues")
+async def list_issues(
+    repo_path: str = Query(...),
+):
+    """List open GitHub issues for a repository via the gh CLI."""
+    proc = await asyncio.create_subprocess_exec(
+        "gh", "issue", "list",
+        "--state", "open",
+        "--limit", "30",
+        "--json", "number,title,labels,state",
+        cwd=repo_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=502,
+            detail=f"gh issue list failed: {stderr.decode().strip()}",
+        )
+    return {"issues": json.loads(stdout.decode())}
+
+
 @router.get("/issue")
 async def get_issue(
     repo_path: str = Query(...),

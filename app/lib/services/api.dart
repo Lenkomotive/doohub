@@ -259,4 +259,17 @@ class ApiService {
     final res = await _dio.get('/repos');
     return res.data;
   }
+
+  Future<Map<String, dynamic>> getIssues(String repoPath) async {
+    final res = await _dio.get('/repos/issues', queryParameters: {'repo_path': repoPath});
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> getIssue(String repoPath, int issueNumber) async {
+    final res = await _dio.get('/repos/issue', queryParameters: {
+      'repo_path': repoPath,
+      'issue_number': issueNumber,
+    });
+    return res.data;
+  }
 }

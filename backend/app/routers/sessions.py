@@ -23,6 +23,23 @@ async def list_repos(_user: User = Depends(get_current_user)):
     return await slave.list_repos()
 
 
+@router.get("/repos/issues")
+async def list_repo_issues(
+    repo_path: str = Query(...),
+    _user: User = Depends(get_current_user),
+):
+    return await slave.list_issues(repo_path)
+
+
+@router.get("/repos/issue")
+async def get_repo_issue(
+    repo_path: str = Query(...),
+    issue_number: int = Query(...),
+    _user: User = Depends(get_current_user),
+):
+    return await slave.fetch_issue(repo_path, issue_number)
+
+
 # --- sessions ---
 
 
