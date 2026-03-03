@@ -8,8 +8,8 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
-    provider_url: str = "http://slave:8001"
-    provider_api_key: str = "change-me"
+    slave_url: str = "http://slave:8001"
+    slave_api_key: str = "change-me"
 
     model_config = {"env_prefix": "DOOHUB_"}
 

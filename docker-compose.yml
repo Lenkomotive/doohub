@@ -26,8 +26,8 @@ services:
     environment:
       - DOOHUB_DATABASE_URL=postgresql://doohub:doohub@db:5432/doohub
       - DOOHUB_SECRET_KEY=change-me-in-production
-      - DOOHUB_PROVIDER_URL=http://slave:8001
-      - DOOHUB_PROVIDER_API_KEY=change-me
+      - DOOHUB_SLAVE_URL=http://slave:8001
+      - DOOHUB_SLAVE_API_KEY=change-me
 
   slave:
     build: ./slave

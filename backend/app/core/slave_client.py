@@ -11,12 +11,12 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
-class ProviderClient:
+class SlaveClient:
     """HTTP client that proxies requests to the slave service."""
 
     def __init__(self) -> None:
-        self.base_url = settings.provider_url.rstrip("/")
-        self.headers = {"X-API-Key": settings.provider_api_key}
+        self.base_url = settings.slave_url.rstrip("/")
+        self.headers = {"X-API-Key": settings.slave_api_key}
 
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -112,4 +112,4 @@ class ProviderClient:
         return await self._request("GET", "/api/repos")
 
 
-provider = ProviderClient()
+slave = SlaveClient()

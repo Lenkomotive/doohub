@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.core.provider_client import provider
+from app.core.slave_client import slave
 from app.models.session import Session, SessionMessage
 from app.models.user import User
 from app.schemas.session import CreateSessionRequest, SendMessageRequest
@@ -20,7 +20,7 @@ router = APIRouter(tags=["sessions"])
 
 @router.get("/repos")
 async def list_repos(_user: User = Depends(get_current_user)):
-    return await provider.list_repos()
+    return await slave.list_repos()
 
 
 # --- sessions ---
@@ -67,7 +67,7 @@ async def session_events(
 
     async def generate():
         snapshot_sent = False
-        async for event in provider.stream_events():
+        async for event in slave.stream_events():
             evt = event.get("event")
             if evt == "snapshot" and not snapshot_sent:
                 busy_keys = set(event.get("sessions", {}).keys())
@@ -165,7 +165,7 @@ async def send_message(
     db.add(SessionMessage(session_id=session.id, role="user", content=body.content))
     db.commit()
 
-    result = await provider.run(
+    result = await slave.run(
         session_key=session_key,
         message=body.content,
         project_path=session.project_path,
@@ -200,7 +200,7 @@ async def cancel_session(
     ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return await provider.cancel(session_key)
+    return await slave.cancel(session_key)
 
 
 @router.get("/sessions/{session_key}/history")
