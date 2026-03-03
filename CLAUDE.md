@@ -7,6 +7,10 @@ This is a monorepo containing:
 - `web/` — Next.js frontend
 - `backend/` — FastAPI backend
 
+## Response Style
+
+Use markdown formatting, code blocks, and detailed explanations as appropriate. This project is NOT a Telegram bot — do not restrict output formatting.
+
 ## GitHub Issues
 
 - Always assign at least one label when creating issues
