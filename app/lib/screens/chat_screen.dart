@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/session.dart';
 import '../models/message.dart';
 import '../bloc/sessions/sessions_cubit.dart';
-import '../bloc/sessions/sessions_state.dart';
 
 class ChatScreen extends StatefulWidget {
   final String sessionKey;
@@ -17,24 +16,24 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _showScrollToBottom = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(() {
+      final scrolledUp = _scrollController.offset > 200;
+      if (scrolledUp != _showScrollToBottom) {
+        setState(() => _showScrollToBottom = scrolledUp);
+      }
+    });
+  }
 
   @override
   void dispose() {
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   void _sendMessage() {
@@ -56,14 +55,6 @@ class _ChatScreenState extends State<ChatScreen> {
         final cubit = context.read<SessionsCubit>();
         final status = session.sending ? 'busy' : session.status;
         final messages = session.messages;
-
-        // Auto-scroll when near bottom
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients &&
-              _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 100) {
-            _scrollToBottom();
-          }
-        });
 
         return Scaffold(
           appBar: AppBar(
@@ -118,22 +109,41 @@ class _ChatScreenState extends State<ChatScreen> {
               Expanded(
                 child: messages.isEmpty && !session.sending
                     ? const Center(child: Text('Send a message to start', style: TextStyle(color: Colors.grey)))
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(12),
-                        itemCount: messages.length + (session.sending ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == messages.length) {
-                            return const Align(
-                              alignment: Alignment.centerLeft,
-                              child: Padding(
-                                padding: EdgeInsets.only(top: 8),
-                                child: _TypingBubble(),
+                    : Stack(
+                        children: [
+                          ListView.builder(
+                            controller: _scrollController,
+                            reverse: true,
+                            padding: const EdgeInsets.all(12),
+                            itemCount: messages.length + (session.sending ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              if (session.sending && index == 0) {
+                                return const Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Padding(
+                                    padding: EdgeInsets.only(top: 8),
+                                    child: _TypingBubble(),
+                                  ),
+                                );
+                              }
+                              final msgIndex = session.sending ? index - 1 : index;
+                              return _MessageBubble(message: messages[messages.length - 1 - msgIndex]);
+                            },
+                          ),
+                          if (_showScrollToBottom)
+                            Positioned(
+                              right: 12,
+                              bottom: 12,
+                              child: FloatingActionButton.small(
+                                onPressed: () => _scrollController.animateTo(
+                                  0,
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeOut,
+                                ),
+                                child: const Icon(Icons.keyboard_arrow_down),
                               ),
-                            );
-                          }
-                          return _MessageBubble(message: messages[index]);
-                        },
+                            ),
+                        ],
                       ),
               ),
 
