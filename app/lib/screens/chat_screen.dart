@@ -17,6 +17,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
+  ChatStatus? _prevChatStatus;
 
   @override
   void dispose() {
@@ -57,7 +58,13 @@ class _ChatScreenState extends State<ChatScreen> {
         final status = session.sending ? 'busy' : session.status;
         final messages = session.messages;
 
-        // Auto-scroll when near bottom
+        // Auto-scroll to bottom when history first loads
+        if (_prevChatStatus != ChatStatus.loaded && session.chatStatus == ChatStatus.loaded) {
+          _scrollToBottom();
+        }
+        _prevChatStatus = session.chatStatus;
+
+        // Auto-scroll when near bottom (new messages)
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scrollController.hasClients &&
               _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 100) {
