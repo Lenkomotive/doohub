@@ -15,6 +15,6 @@ Host host
 SSHEOF
 chmod 700 "$SSH_DIR"
 chmod 600 "$SSH_DIR/config"
-chown -R claude:claude "$SSH_DIR"
+chown claude:claude "$SSH_DIR" "$SSH_DIR/host-key" "$SSH_DIR/config"
 
 exec su claude -s /bin/bash -c "cd /app && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8001"
