@@ -24,6 +24,7 @@ services:
     volumes:
       - slave-projects:/projects
       - slave-claude:/home/claude/.claude
+      - /opt/shared/doohub-ops-key:/home/claude/.ssh/doohub-ops-key:ro
     networks:
       - doohub-net
 
