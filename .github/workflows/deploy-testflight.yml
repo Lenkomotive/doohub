@@ -1,4 +1,4 @@
-name: Bump & Deploy to TestFlight
+name: Deploy to TestFlight
 
 on:
   workflow_dispatch:
@@ -17,25 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bump build number
-        working-directory: .
-        run: |
-          cd app
-          CURRENT=$(grep '^version:' pubspec.yaml | sed 's/.*+//')
-          NEXT=$((CURRENT + 1))
-          sed -i "s/+${CURRENT}/+${NEXT}/" pubspec.yaml
-          echo "Build number: $CURRENT → $NEXT"
-
-      - name: Commit build number bump
-        working-directory: .
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add app/pubspec.yaml
-          git commit -m "Bump build number to $(grep '^version:' app/pubspec.yaml | sed 's/.*+//')"
-          git push
+          ref: main
 
       - name: Select Xcode 26
         working-directory: .
