@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -40,6 +40,13 @@ def create_refresh_token(user_id: int) -> str:
         {"sub": str(user_id), "type": "refresh"},
         timedelta(days=settings.refresh_token_expire_days),
     )
+
+
+def require_slave_api_key(
+    x_api_key: str = Header(..., alias="X-API-Key"),
+) -> None:
+    if x_api_key != settings.slave_api_key:
+        raise HTTPException(status_code=403, detail="Invalid API key")
 
 
 def get_current_user(

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.database import Base
 from app.models.user import User  # noqa: F401
 from app.models.session import Session, SessionMessage  # noqa: F401
+from app.models.pipeline import Pipeline  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

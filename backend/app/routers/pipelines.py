@@ -1,0 +1,221 @@
+import asyncio
+import json
+import logging
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session as DBSession
+
+from app.core.auth import get_current_user, require_slave_api_key
+from app.core.config import settings
+from app.core.database import get_db
+from app.core.pipeline_events import pipeline_events
+from app.core.slave_client import slave
+from app.models.pipeline import Pipeline
+from app.models.user import User
+from app.schemas.pipeline import CreatePipelineRequest, PipelineCallbackRequest
+
+logger = logging.getLogger(__name__)
+router = APIRouter(tags=["pipelines"])
+
+
+@router.post("/pipelines", status_code=201)
+async def create_pipeline(
+    body: CreatePipelineRequest,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipeline_key = uuid4().hex[:12]
+    pipeline = Pipeline(
+        user_id=user.id,
+        pipeline_key=pipeline_key,
+        repo_path=body.repo_path,
+        issue_number=body.issue_number,
+        task_description=body.task_description,
+        model=body.model,
+    )
+    db.add(pipeline)
+    db.commit()
+
+    callback_url = f"{settings.backend_internal_url}/internal/pipelines/callback"
+
+    # Fire-and-forget to slave
+    try:
+        await slave.start_pipeline(
+            pipeline_key=pipeline_key,
+            repo_path=body.repo_path,
+            issue_number=body.issue_number,
+            task_description=body.task_description,
+            model=body.model,
+            callback_url=callback_url,
+        )
+    except HTTPException:
+        pipeline.status = "failed"
+        pipeline.error = "Failed to reach slave service"
+        db.commit()
+        raise
+
+    return {
+        "pipeline_key": pipeline_key,
+        "status": pipeline.status,
+    }
+
+
+@router.get("/pipelines")
+async def list_pipelines(
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipelines = (
+        db.query(Pipeline)
+        .filter(Pipeline.user_id == user.id)
+        .order_by(Pipeline.created_at.desc())
+        .all()
+    )
+    return {
+        "pipelines": [_serialize(p) for p in pipelines],
+        "total": len(pipelines),
+    }
+
+
+@router.get("/pipelines/events")
+async def pipeline_sse(
+    user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    user_keys = {
+        p.pipeline_key
+        for p in db.query(Pipeline).filter(Pipeline.user_id == user.id).all()
+    }
+
+    async def generate():
+        q = pipeline_events.subscribe()
+        try:
+            while True:
+                event = await asyncio.wait_for(q.get(), timeout=30)
+                if event.get("pipeline_key") in user_keys:
+                    yield f"event: pipeline\ndata: {json.dumps(event)}\n\n"
+        except asyncio.TimeoutError:
+            yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            pipeline_events.unsubscribe(q)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@router.get("/pipelines/{pipeline_key}")
+async def get_pipeline(
+    pipeline_key: str,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipeline = _get_user_pipeline(db, pipeline_key, user.id)
+    return _serialize(pipeline)
+
+
+@router.post("/pipelines/{pipeline_key}/cancel")
+async def cancel_pipeline(
+    pipeline_key: str,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipeline = _get_user_pipeline(db, pipeline_key, user.id)
+    try:
+        await slave.cancel_pipeline(pipeline_key)
+    except HTTPException:
+        pass
+    pipeline.status = "cancelled"
+    db.commit()
+    await pipeline_events.publish({"pipeline_key": pipeline_key, "status": "cancelled"})
+    return {"status": "cancelled"}
+
+
+@router.delete("/pipelines/{pipeline_key}", status_code=204)
+async def delete_pipeline(
+    pipeline_key: str,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipeline = _get_user_pipeline(db, pipeline_key, user.id)
+    db.delete(pipeline)
+    db.commit()
+
+
+# --- internal callback (slave -> backend) ---
+
+
+@router.post("/internal/pipelines/callback")
+async def pipeline_callback(
+    body: PipelineCallbackRequest,
+    db: DBSession = Depends(get_db),
+    _auth: None = Depends(require_slave_api_key),
+):
+    pipeline = db.query(Pipeline).filter(
+        Pipeline.pipeline_key == body.pipeline_key
+    ).first()
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    pipeline.status = body.status
+    if body.plan is not None:
+        pipeline.plan = body.plan
+    if body.branch is not None:
+        pipeline.branch = body.branch
+    if body.pr_number is not None:
+        pipeline.pr_number = body.pr_number
+    if body.pr_url is not None:
+        pipeline.pr_url = body.pr_url
+    if body.error is not None:
+        pipeline.error = body.error
+    if body.cost_usd is not None:
+        pipeline.total_cost_usd += body.cost_usd
+    if body.claude_session_id is not None:
+        pipeline.claude_session_id = body.claude_session_id
+    db.commit()
+
+    event = {"pipeline_key": body.pipeline_key, "status": body.status}
+    if body.step_log:
+        event["step_log"] = body.step_log
+    if body.pr_url:
+        event["pr_url"] = body.pr_url
+    if body.error:
+        event["error"] = body.error
+    await pipeline_events.publish(event)
+
+    return {"ok": True}
+
+
+# --- helpers ---
+
+
+def _get_user_pipeline(db: DBSession, pipeline_key: str, user_id: int) -> Pipeline:
+    pipeline = db.query(Pipeline).filter(
+        Pipeline.pipeline_key == pipeline_key, Pipeline.user_id == user_id
+    ).first()
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    return pipeline
+
+
+def _serialize(p: Pipeline) -> dict:
+    return {
+        "pipeline_key": p.pipeline_key,
+        "repo_path": p.repo_path,
+        "issue_number": p.issue_number,
+        "issue_title": p.issue_title,
+        "task_description": p.task_description,
+        "status": p.status,
+        "plan": p.plan,
+        "branch": p.branch,
+        "pr_number": p.pr_number,
+        "pr_url": p.pr_url,
+        "error": p.error,
+        "review_round": p.review_round,
+        "model": p.model,
+        "total_cost_usd": p.total_cost_usd,
+        "created_at": p.created_at.isoformat(),
+        "updated_at": p.updated_at.isoformat(),
+    }

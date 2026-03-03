@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     slave_url: str = "http://slave:8001"
     slave_api_key: str = "change-me"
+    backend_internal_url: str = "http://backend:8000"
 
     model_config = {"env_prefix": "DOOHUB_"}
 

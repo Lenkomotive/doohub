@@ -111,5 +111,32 @@ class SlaveClient:
     async def list_repos(self) -> Any:
         return await self._request("GET", "/api/repos")
 
+    async def start_pipeline(
+        self,
+        pipeline_key: str,
+        repo_path: str,
+        issue_number: int | None,
+        task_description: str | None,
+        model: str,
+        callback_url: str,
+    ) -> Any:
+        return await self._request("POST", "/api/orchestrate", json={
+            "pipeline_key": pipeline_key,
+            "repo_path": repo_path,
+            "issue_number": issue_number,
+            "task_description": task_description,
+            "model": model,
+            "callback_url": callback_url,
+        })
+
+    async def cancel_pipeline(self, pipeline_key: str) -> Any:
+        return await self._request("POST", f"/api/orchestrate/{pipeline_key}/cancel")
+
+    async def fetch_issue(self, repo_path: str, issue_number: int) -> Any:
+        return await self._request("GET", "/api/repos/issue", params={
+            "repo_path": repo_path,
+            "issue_number": issue_number,
+        })
+
 
 slave = SlaveClient()
