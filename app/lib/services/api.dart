@@ -198,6 +198,61 @@ class ApiService {
     }
   }
 
+  // Pipelines
+
+  Future<Map<String, dynamic>> getPipelines() async {
+    final res = await _dio.get('/pipelines');
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> createPipeline({
+    required String repoPath,
+    int? issueNumber,
+    String? taskDescription,
+    String model = 'claude-sonnet-4-6',
+  }) async {
+    final res = await _dio.post('/pipelines', data: {
+      'repo_path': repoPath,
+      if (issueNumber != null) 'issue_number': issueNumber,
+      if (taskDescription != null) 'task_description': taskDescription,
+      'model': model,
+    });
+    return res.data;
+  }
+
+  Future<void> cancelPipeline(String key) async {
+    await _dio.post('/pipelines/$key/cancel');
+  }
+
+  Future<void> deletePipeline(String key) async {
+    await _dio.delete('/pipelines/$key');
+  }
+
+  Stream<Map<String, dynamic>> pipelineEvents() async* {
+    final token = await _storage.read(key: 'access_token');
+    final uri = Uri.parse('$baseUrl/pipelines/events');
+    final request = await HttpClient().getUrl(uri)
+      ..headers.set('Authorization', 'Bearer ${token ?? ''}')
+      ..headers.set('Accept', 'text/event-stream')
+      ..headers.set('Cache-Control', 'no-cache');
+    final response = await request.close();
+    String eventType = 'message';
+    await for (final chunk in response.transform(const Utf8Decoder())) {
+      for (final line in chunk.split('\n')) {
+        if (line.startsWith('event:')) {
+          eventType = line.substring(6).trim();
+        } else if (line.startsWith('data:')) {
+          final dataStr = line.substring(5).trim();
+          try {
+            final data = jsonDecode(dataStr) as Map<String, dynamic>;
+            yield {'event': eventType, ...data};
+          } catch (_) {}
+          eventType = 'message';
+        }
+      }
+    }
+  }
+
   // Repos
 
   Future<Map<String, dynamic>> getRepos() async {
