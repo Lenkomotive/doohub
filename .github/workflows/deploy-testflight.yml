@@ -1,4 +1,4 @@
-name: Deploy to TestFlight
+name: Bump & Deploy to TestFlight
 
 on:
   workflow_dispatch:
