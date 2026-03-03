@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/session.dart';
 import '../models/message.dart';
 import '../bloc/sessions/sessions_cubit.dart';
-import '../bloc/sessions/sessions_state.dart';
 
 class ChatScreen extends StatefulWidget {
   final String sessionKey;
@@ -16,26 +15,11 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _inputController = TextEditingController();
-  final _scrollController = ScrollController();
-  ChatStatus? _prevChatStatus;
 
   @override
   void dispose() {
     _inputController.dispose();
-    _scrollController.dispose();
     super.dispose();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   void _sendMessage() {
@@ -57,20 +41,6 @@ class _ChatScreenState extends State<ChatScreen> {
         final cubit = context.read<SessionsCubit>();
         final status = session.sending ? 'busy' : session.status;
         final messages = session.messages;
-
-        // Auto-scroll to bottom when history first loads
-        if (_prevChatStatus != ChatStatus.loaded && session.chatStatus == ChatStatus.loaded) {
-          _scrollToBottom();
-        }
-        _prevChatStatus = session.chatStatus;
-
-        // Auto-scroll when near bottom (new messages)
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients &&
-              _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 100) {
-            _scrollToBottom();
-          }
-        });
 
         return Scaffold(
           appBar: AppBar(
@@ -126,11 +96,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: messages.isEmpty && !session.sending
                     ? const Center(child: Text('Send a message to start', style: TextStyle(color: Colors.grey)))
                     : ListView.builder(
-                        controller: _scrollController,
+                        reverse: true,
                         padding: const EdgeInsets.all(12),
                         itemCount: messages.length + (session.sending ? 1 : 0),
                         itemBuilder: (context, index) {
-                          if (index == messages.length) {
+                          if (session.sending && index == 0) {
                             return const Align(
                               alignment: Alignment.centerLeft,
                               child: Padding(
@@ -139,7 +109,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                             );
                           }
-                          return _MessageBubble(message: messages[index]);
+                          final msgIndex = session.sending ? index - 1 : index;
+                          return _MessageBubble(message: messages[messages.length - 1 - msgIndex]);
                         },
                       ),
               ),
