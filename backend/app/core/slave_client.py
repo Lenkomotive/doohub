@@ -132,6 +132,11 @@ class SlaveClient:
     async def cancel_pipeline(self, pipeline_key: str) -> Any:
         return await self._request("POST", f"/api/orchestrate/{pipeline_key}/cancel")
 
+    async def list_issues(self, repo_path: str) -> Any:
+        return await self._request("GET", "/api/repos/issues", params={
+            "repo_path": repo_path,
+        })
+
     async def fetch_issue(self, repo_path: str, issue_number: int) -> Any:
         return await self._request("GET", "/api/repos/issue", params={
             "repo_path": repo_path,
