@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/session.dart';
 import '../models/message.dart';
 import '../bloc/sessions/sessions_cubit.dart';
+import '../bloc/sessions/sessions_state.dart';
 
 class ChatScreen extends StatefulWidget {
   final String sessionKey;
