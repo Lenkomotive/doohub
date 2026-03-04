@@ -89,10 +89,11 @@ function ChatView() {
 
   // Cleanup object URLs on unmount
   useEffect(() => {
+    const currentImages = pendingImages;
     return () => {
-      pendingImages.forEach((img) => URL.revokeObjectURL(img.preview));
+      currentImages.forEach((img) => URL.revokeObjectURL(img.preview));
     };
-  }, []);
+  }, [pendingImages]);
 
   const uploadImage = useCallback(async (file: File): Promise<void> => {
     if (file.size > 10 * 1024 * 1024) {
@@ -349,6 +350,7 @@ function ChatView() {
                         target="_blank"
                         rel="noopener noreferrer"
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={resolveImageUrl(url)}
                           alt=""
@@ -383,6 +385,7 @@ function ChatView() {
             <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
               {pendingImages.map((img) => (
                 <div key={img.preview} className="relative shrink-0 group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={img.preview}
                     alt=""
