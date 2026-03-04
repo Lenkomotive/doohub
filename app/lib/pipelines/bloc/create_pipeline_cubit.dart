@@ -32,7 +32,6 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
       final data = await api.getIssues(repoPath, page: 1, perPage: 30);
       final issues = (data['issues'] as List).cast<Map<String, dynamic>>();
       final hasMore = data['has_more'] as bool? ?? false;
-      print('Issues page 1: fetched ${issues.length}, hasMore=$hasMore');
       if (!isClosed) emit(state.copyWith(issues: issues, loadingIssues: false, issuesPage: 1, hasMoreIssues: hasMore));
     } catch (_) {
       if (!isClosed) emit(state.copyWith(loadingIssues: false));
@@ -47,7 +46,6 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
       final data = await api.getIssues(state.selectedRepo, page: nextPage, perPage: 20);
       final newIssues = (data['issues'] as List).cast<Map<String, dynamic>>();
       final hasMore = data['has_more'] as bool? ?? false;
-      print('Issues page $nextPage: fetched ${newIssues.length}, hasMore=$hasMore, total=${state.issues.length + newIssues.length}');
       if (!isClosed) {
         emit(state.copyWith(
           issues: [...state.issues, ...newIssues],
