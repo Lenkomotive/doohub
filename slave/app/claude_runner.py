@@ -146,7 +146,7 @@ async def run_prompt(
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        return {"type": "result", "result": raw, "session_id": claude_session_id}
+        return {"type": "result", "result": raw.strip(), "session_id": claude_session_id}
 
 
 async def stream_prompt(
@@ -211,7 +211,7 @@ async def stream_prompt(
             elif etype == "result":
                 new_session_id = event.get("session_id", new_session_id)
                 cost_usd = event.get("cost_usd")
-                result_text = event.get("result", result_text)
+                result_text = event.get("result", result_text).strip()
 
         await proc.wait()
 
