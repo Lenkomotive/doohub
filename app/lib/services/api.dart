@@ -137,10 +137,19 @@ class ApiService {
     return res.data;
   }
 
-  Future<Map<String, dynamic>> sendMessage(String key, String content) async {
+  Future<Map<String, dynamic>> sendMessage(String key, String content, {List<int>? attachmentIds}) async {
     final res = await _dio.post('/sessions/$key/messages', data: {
       'content': content,
+      if (attachmentIds != null && attachmentIds.isNotEmpty) 'attachment_ids': attachmentIds,
     });
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> uploadAttachment(String key, File file) async {
+    final formData = FormData.fromMap({
+      'file': await MultipartFile.fromFile(file.path, filename: file.path.split('/').last),
+    });
+    final res = await _dio.post('/sessions/$key/upload', data: formData);
     return res.data;
   }
 
