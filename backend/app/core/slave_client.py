@@ -123,7 +123,7 @@ class SlaveClient:
         })
 
     async def stream_events(self) -> AsyncGenerator[dict, None]:
-        async for event in self._stream_sse("GET", "/api/sessions/events"):
+        async for event in self._stream_sse("GET", "/api/events"):
             yield event
 
     async def cancel(self, key: str) -> Any:
