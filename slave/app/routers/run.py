@@ -78,15 +78,16 @@ async def run(req: RunRequest):
 @router.post("/run/files")
 async def run_with_files(
     session_key: str = Form(...),
-    message: str = Form(...),
+    message: str = Form(""),
     project_path: str = Form("/projects"),
     model: str = Form("claude-opus-4-6"),
     claude_session_id: str = Form(None),
-    interactive: bool = Form(False),
+    interactive: str = Form("false"),
     timeout: int = Form(300),
     files: list[UploadFile] = File(default=[]),
 ):
     """Blocking Claude run with file attachments."""
+    interactive = interactive.lower() in ("true", "1", "yes")
     if session_key in busy_keys():
         raise HTTPException(status_code=409, detail="Session is busy")
 
