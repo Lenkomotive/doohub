@@ -27,7 +27,7 @@ Future<void> _initFCM() async {
     final messaging = FirebaseMessaging.instance;
     
     // Request permissions
-    final settings = await messaging.requestPermission(
+    await messaging.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -37,45 +37,25 @@ Future<void> _initFCM() async {
       sound: true,
     );
     
-    print('Notification permission status: ${settings.authorizationStatus}');
-    
     // On iOS, get APNS token first
     try {
-      final apnsToken = await messaging.getAPNSToken();
-      print('APNS Token: $apnsToken');
-      if (apnsToken == null) {
-        print('WARNING: APNS token is null. Check Firebase Console for APNS certificate.');
-      }
-    } catch (e) {
-      print('Failed to get APNS token: $e');
-    }
+      await messaging.getAPNSToken();
+    } catch (_) {}
 
     // Get FCM token with retries
     String? token;
     for (var i = 0; i < 5 && token == null; i++) {
       try {
         token = await messaging.getToken();
-        if (token != null) {
-          print('FCM Token acquired on attempt ${i + 1}: $token');
-          break;
-        }
-      } catch (e) {
-        print('Attempt ${i + 1} to get FCM token failed: $e');
+      } catch (_) {
         if (i < 4) await Future.delayed(const Duration(seconds: 1));
       }
     }
-    
-    if (token == null) {
-      print('ERROR: Failed to get FCM token after 5 attempts');
-    }
 
     FirebaseMessaging.onMessage.listen((message) {
-      print('Foreground message: ${message.notification?.title} - ${message.notification?.body}');
+      // TODO: show in-app notification
     });
-  } catch (e, stackTrace) {
-    print('ERROR in _initFCM: $e');
-    print('Stack trace: $stackTrace');
-  }
+  } catch (_) {}
 }
 
 final _darkTheme = ThemeData(
