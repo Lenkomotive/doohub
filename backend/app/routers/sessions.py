@@ -1,7 +1,7 @@
 import json
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session as DBSession
 
@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.core.slave_client import slave
 from app.models.session import Session, SessionMessage
 from app.models.user import User
-from app.schemas.session import CreateSessionRequest, SendMessageRequest
+from app.schemas.session import CreateSessionRequest
 
 router = APIRouter(tags=["sessions"])
 
@@ -171,7 +171,8 @@ async def delete_session(
 @router.post("/sessions/{session_key}/messages")
 async def send_message(
     session_key: str,
-    body: SendMessageRequest,
+    content: str = Form(...),
+    files: list[UploadFile] = File(default=[]),
     db: DBSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -181,16 +182,25 @@ async def send_message(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    db.add(SessionMessage(session_id=session.id, role="user", content=body.content))
+    db.add(SessionMessage(session_id=session.id, role="user", content=content))
     db.commit()
+
+    # Read uploaded files into memory for forwarding to slave
+    file_tuples = None
+    if files:
+        file_tuples = []
+        for f in files:
+            data = await f.read()
+            file_tuples.append((f.filename or "file", data, f.content_type or "application/octet-stream"))
 
     result = await slave.run(
         session_key=session_key,
-        message=body.content,
+        message=content,
         project_path=session.project_path,
         model=session.model,
         claude_session_id=session.claude_session_id,
         interactive=session.interactive,
+        files=file_tuples,
     )
 
     response_text = (result.get("result") or result.get("error") or "").strip()
