@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -10,30 +10,30 @@ import {
   FolderGit2,
   Trash2,
   XCircle,
-  Paperclip,
+  ImagePlus,
   X,
-  FileIcon,
-  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AuthGuard } from "@/components/auth-guard";
 import { apiFetch, apiUpload } from "@/lib/api";
 
-interface Attachment {
-  id: number;
-  filename: string;
-  mime_type: string;
-  file_size: number;
-  url: string;
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface Message {
   id: number;
   role: "user" | "assistant";
   content: string;
+  image_urls?: string[] | null;
   created_at: string;
-  attachments?: Attachment[];
+}
+
+interface PendingImage {
+  file: File;
+  preview: string;
+  url?: string;
+  uploading: boolean;
+  error?: string;
 }
 
 interface SessionInfo {
@@ -45,12 +45,6 @@ interface SessionInfo {
   claude_session_id: string | null;
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function ChatView() {
   const params = useParams();
   const router = useRouter();
@@ -60,10 +54,12 @@ function ChatView() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const [dragging, setDragging] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
 
   const fetchSession = async () => {
     const res = await apiFetch(`/sessions/${sessionKey}`);
@@ -91,37 +87,117 @@ function ChatView() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      pendingImages.forEach((img) => URL.revokeObjectURL(img.preview));
+    };
+  }, []);
+
+  const uploadImage = useCallback(async (file: File): Promise<void> => {
+    if (file.size > 10 * 1024 * 1024) {
+      setPendingImages((prev) => [
+        ...prev,
+        { file, preview: URL.createObjectURL(file), uploading: false, error: "File too large (max 10MB)" },
+      ]);
+      return;
+    }
+
+    const preview = URL.createObjectURL(file);
+    const newImg: PendingImage = { file, preview, uploading: true };
+
+    setPendingImages((prev) => [...prev, newImg]);
+
+    const res = await apiUpload(`/sessions/${sessionKey}/upload`, file);
+    if (res.ok) {
+      const data = await res.json();
+      setPendingImages((prev) =>
+        prev.map((img) =>
+          img.preview === preview ? { ...img, url: data.url, uploading: false } : img
+        )
+      );
+    } else {
+      setPendingImages((prev) =>
+        prev.map((img) =>
+          img.preview === preview ? { ...img, uploading: false, error: "Upload failed" } : img
+        )
+      );
+    }
+  }, [sessionKey]);
+
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    imageFiles.forEach((f) => uploadImage(f));
+  }, [uploadImage]);
+
+  const removeImage = useCallback((preview: string) => {
+    setPendingImages((prev) => {
+      const img = prev.find((i) => i.preview === preview);
+      if (img) URL.revokeObjectURL(img.preview);
+      return prev.filter((i) => i.preview !== preview);
+    });
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragging(false);
+    if (e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
+  }, [addFiles]);
+
   const handleSend = async () => {
-    if ((!input.trim() && pendingFiles.length === 0) || sending) return;
+    const hasText = input.trim().length > 0;
+    const readyImages = pendingImages.filter((img) => img.url && !img.error);
+    if ((!hasText && readyImages.length === 0) || sending) return;
 
     const message = input.trim();
+    const imageUrls = readyImages.map((img) => img.url!);
     setInput("");
+    // Clear pending images and revoke URLs
+    pendingImages.forEach((img) => URL.revokeObjectURL(img.preview));
+    setPendingImages([]);
     setSending(true);
-    const filesToSend = [...pendingFiles];
-    setPendingFiles([]);
 
     const optimisticMsg: Message = {
       id: Date.now(),
       role: "user",
       content: message,
+      image_urls: imageUrls.length > 0 ? imageUrls : null,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimisticMsg]);
 
-    let res: Response;
-    if (filesToSend.length > 0) {
-      const formData = new FormData();
-      formData.append("content", message);
-      for (const file of filesToSend) {
-        formData.append("files", file);
-      }
-      res = await apiUpload(`/sessions/${sessionKey}/messages`, formData);
-    } else {
-      res = await apiFetch(`/sessions/${sessionKey}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content: message }),
-      });
+    const body: Record<string, unknown> = { content: message };
+    if (imageUrls.length > 0) {
+      body.image_urls = imageUrls;
     }
+
+    const res = await apiFetch(`/sessions/${sessionKey}/messages`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
 
     if (res.ok) {
       const data = await res.json();
@@ -160,14 +236,9 @@ function ChatView() {
     router.push("/sessions");
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setPendingFiles((prev) => [...prev, ...files].slice(0, 5));
-    e.target.value = "";
-  };
-
-  const removePendingFile = (index: number) => {
-    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  const resolveImageUrl = (url: string) => {
+    if (url.startsWith("http")) return url;
+    return `${API_URL}${url}`;
   };
 
   if (!session) {
@@ -178,8 +249,30 @@ function ChatView() {
     );
   }
 
+  const uploading = pendingImages.some((img) => img.uploading);
+  const canSend =
+    (input.trim().length > 0 || pendingImages.some((img) => img.url && !img.error)) &&
+    !sending &&
+    !uploading;
+
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div
+      className="flex h-[100dvh] flex-col bg-background relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {dragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 border-2 border-dashed border-primary rounded-lg m-2">
+          <div className="text-center">
+            <ImagePlus className="h-10 w-10 mx-auto text-primary mb-2" />
+            <p className="text-sm font-medium text-primary">Drop images here</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
         <div className="flex items-center gap-2">
@@ -247,24 +340,25 @@ function ChatView() {
                     : "bg-muted text-foreground"
                 }`}
               >
-                <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
-                {msg.attachments && msg.attachments.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {msg.attachments.map((att) => (
+                {msg.image_urls && msg.image_urls.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    {msg.image_urls.map((url, i) => (
                       <a
-                        key={att.id}
-                        href={att.url}
+                        key={i}
+                        href={resolveImageUrl(url)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-lg bg-background/20 px-2 py-1 text-xs hover:bg-background/30"
                       >
-                        <Download className="h-3 w-3" />
-                        <span className="truncate">{att.filename}</span>
-                        <span className="text-[10px] opacity-70">{formatFileSize(att.file_size)}</span>
+                        <img
+                          src={resolveImageUrl(url)}
+                          alt=""
+                          className="rounded-lg max-h-60 max-w-xs object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                        />
                       </a>
                     ))}
                   </div>
                 )}
+                <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
               </div>
             </div>
           ))}
@@ -281,61 +375,81 @@ function ChatView() {
         </div>
       </div>
 
-      {/* Pending files */}
-      {pendingFiles.length > 0 && (
-        <div className="shrink-0 border-t border-border/50 px-3 py-2">
-          <div className="mx-auto flex max-w-3xl flex-wrap gap-2">
-            {pendingFiles.map((file, i) => (
-              <div key={i} className="flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1 text-xs">
-                <FileIcon className="h-3 w-3 text-muted-foreground" />
-                <span className="max-w-32 truncate">{file.name}</span>
-                <span className="text-muted-foreground">{formatFileSize(file.size)}</span>
-                <button onClick={() => removePendingFile(i)} className="ml-0.5 text-muted-foreground hover:text-foreground">
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Input */}
-      <div className="shrink-0 border-t border-border/50 px-3 py-2">
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 shrink-0 text-muted-foreground"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={sending}
-          >
-            <Paperclip className="h-4 w-4" />
-          </Button>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Send a message..."
-            rows={1}
-            className="flex-1 resize-none rounded-2xl border border-border/50 bg-muted/50 px-3.5 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            disabled={sending}
-          />
-          <Button
-            size="icon"
-            onClick={handleSend}
-            disabled={(!input.trim() && pendingFiles.length === 0) || sending}
-            className="h-9 w-9 shrink-0 rounded-2xl"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+      <div className="shrink-0 border-t border-border/50 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-3xl">
+          {/* Pending image previews */}
+          {pendingImages.length > 0 && (
+            <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+              {pendingImages.map((img) => (
+                <div key={img.preview} className="relative shrink-0 group">
+                  <img
+                    src={img.preview}
+                    alt=""
+                    className={`h-16 w-16 rounded-lg object-cover border border-border/50 ${
+                      img.error ? "opacity-50" : ""
+                    }`}
+                  />
+                  {img.uploading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  )}
+                  {img.error && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-destructive/20 rounded-lg">
+                      <span className="text-[9px] text-destructive font-medium px-1 text-center">{img.error}</span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeImage(img.preview)}
+                    className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-background border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0 rounded-2xl"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+            >
+              <ImagePlus className="h-4 w-4" />
+            </Button>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Send a message..."
+              rows={1}
+              className="flex-1 resize-none rounded-2xl border border-border/50 bg-muted/50 px-3.5 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              disabled={sending}
+            />
+            <Button
+              size="icon"
+              onClick={handleSend}
+              disabled={!canSend}
+              className="h-9 w-9 shrink-0 rounded-2xl"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>

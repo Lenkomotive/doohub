@@ -10,3 +10,4 @@ class CreateSessionRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str
+    image_urls: list[str] = []

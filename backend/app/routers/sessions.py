@@ -1,19 +1,21 @@
 import asyncio
 import json
+import os
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.auth import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.fcm import send_push
 from app.core.session_events import session_events as session_event_bus
 from app.core.slave_client import slave
 from app.models.session import Session, SessionMessage
 from app.models.user import User
-from app.schemas.session import CreateSessionRequest
+from app.schemas.session import CreateSessionRequest, SendMessageRequest
 
 router = APIRouter(tags=["sessions"])
 
@@ -185,8 +187,7 @@ async def delete_session(
 @router.post("/sessions/{session_key}/messages")
 async def send_message(
     session_key: str,
-    content: str = Form(...),
-    files: list[UploadFile] = File(default=[]),
+    body: SendMessageRequest,
     db: DBSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -196,25 +197,40 @@ async def send_message(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    db.add(SessionMessage(session_id=session.id, role="user", content=content))
+    image_urls_json = json.dumps(body.image_urls) if body.image_urls else None
+    db.add(SessionMessage(
+        session_id=session.id, role="user", content=body.content,
+        image_urls=image_urls_json,
+    ))
     db.commit()
 
-    # Read uploaded files into memory for forwarding to slave
+    # Read uploaded image files from disk to forward to slave
     file_tuples = None
-    if files:
+    if body.image_urls:
         file_tuples = []
-        for f in files:
-            data = await f.read()
-            file_tuples.append((f.filename or "file", data, f.content_type or "application/octet-stream"))
+        for url in body.image_urls:
+            # URLs are like /uploads/abc123.png — extract filename
+            filename = url.split("/")[-1]
+            filepath = os.path.join(settings.upload_dir, filename)
+            if os.path.isfile(filepath):
+                with open(filepath, "rb") as f:
+                    data = f.read()
+                ext = os.path.splitext(filename)[1].lower()
+                mime = {
+                    ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                    ".png": "image/png", ".gif": "image/gif",
+                    ".webp": "image/webp",
+                }.get(ext, "application/octet-stream")
+                file_tuples.append((filename, data, mime))
 
     result = await slave.run(
         session_key=session_key,
-        message=content,
+        message=body.content,
         project_path=session.project_path,
         model=session.model,
         claude_session_id=session.claude_session_id,
         interactive=session.interactive,
-        files=file_tuples,
+        files=file_tuples if file_tuples else None,
     )
 
     response_text = (result.get("result") or result.get("error") or "").strip()
@@ -250,6 +266,42 @@ async def cancel_session(
     return await slave.cancel(session_key)
 
 
+@router.post("/sessions/{session_key}/upload")
+async def upload_image(
+    session_key: str,
+    file: UploadFile,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session = db.query(Session).filter(
+        Session.session_key == session_key, Session.user_id == user.id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if file.content_type not in settings.allowed_image_types:
+        raise HTTPException(status_code=400, detail="File type not allowed. Supported: JPEG, PNG, GIF, WebP")
+
+    contents = await file.read()
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    if len(contents) > max_bytes:
+        raise HTTPException(status_code=400, detail=f"File too large (max {settings.max_upload_size_mb}MB)")
+
+    ext = os.path.splitext(file.filename or "upload.png")[1] or ".png"
+    filename = f"{uuid4().hex}{ext}"
+    filepath = os.path.join(settings.upload_dir, filename)
+    os.makedirs(settings.upload_dir, exist_ok=True)
+
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    return {
+        "url": f"/uploads/{filename}",
+        "filename": file.filename,
+        "size": len(contents),
+    }
+
+
 @router.get("/sessions/{session_key}/history")
 def get_message_history(
     session_key: str,
@@ -275,7 +327,13 @@ def get_message_history(
     )
     return {
         "messages": [
-            {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "image_urls": json.loads(m.image_urls) if m.image_urls else None,
+                "created_at": m.created_at.isoformat(),
+            }
             for m in messages
         ],
         "total": total,

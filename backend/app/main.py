@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.slave_client import _session_event_consumer
@@ -26,6 +27,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+os.makedirs(settings.upload_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 cors_origins = ["http://localhost:3000"]
 if os.environ.get("DOOHUB_CORS_ORIGIN"):

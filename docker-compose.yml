@@ -18,6 +18,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -55,5 +56,6 @@ services:
 
 volumes:
   pgdata:
+  uploads:
   slave-projects:
   slave-claude:

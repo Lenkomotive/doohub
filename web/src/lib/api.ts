@@ -32,7 +32,7 @@ export async function apiFetch(
 
 export async function apiUpload(
   path: string,
-  body: FormData,
+  file: File
 ): Promise<Response> {
   const token = typeof window !== "undefined"
     ? sessionStorage.getItem("access_token")
@@ -43,17 +43,24 @@ export async function apiUpload(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
+  const formData = new FormData();
+  formData.append("file", file);
+
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers,
-    body,
+    body: formData,
   });
 
   if (res.status === 401 && token) {
     const refreshed = await tryRefresh();
     if (refreshed) {
       headers["Authorization"] = `Bearer ${sessionStorage.getItem("access_token")}`;
-      return fetch(`${API_URL}${path}`, { method: "POST", headers, body });
+      return fetch(`${API_URL}${path}`, {
+        method: "POST",
+        headers,
+        body: formData,
+      });
     }
   }
 
