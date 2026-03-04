@@ -210,8 +210,10 @@ function ChatView() {
           ))}
           {sending && (
             <div className="flex justify-start">
-              <div className="rounded-2xl bg-muted px-3.5 py-2">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <div className="flex items-center gap-1 rounded-2xl bg-muted px-3.5 py-2.5">
+                <span className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "0ms" }} />
+                <span className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "200ms" }} />
+                <span className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground" style={{ animationDelay: "400ms" }} />
               </div>
             </div>
           )}

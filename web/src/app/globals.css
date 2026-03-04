@@ -164,3 +164,12 @@
     opacity: 0.8;
   }
 }
+
+@keyframes typingDot {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+.typing-dot {
+  animation: typingDot 1.2s infinite;
+}
