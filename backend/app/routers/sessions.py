@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.core.slave_client import slave
 from app.models.session import Session, SessionMessage
 from app.models.user import User
-from app.schemas.session import CreateSessionRequest, SendMessageRequest
+from app.schemas.session import CreateSessionRequest
 
 router = APIRouter(tags=["sessions"])
 
@@ -201,7 +201,8 @@ async def _run_and_save(session, session_key, content, db, files=None):
 @router.post("/sessions/{session_key}/messages")
 async def send_message(
     session_key: str,
-    body: SendMessageRequest,
+    content: str = Form(None),
+    files: list[UploadFile] = File(default=[]),
     db: DBSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -210,29 +211,20 @@ async def send_message(
     ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return await _run_and_save(session, session_key, body.content, db)
 
-
-@router.post("/sessions/{session_key}/messages/files")
-async def send_message_with_files(
-    session_key: str,
-    content: str = Form(...),
-    files: list[UploadFile] = File(...),
-    db: DBSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    session = db.query(Session).filter(
-        Session.session_key == session_key, Session.user_id == user.id
-    ).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    # If no form content, try reading JSON body
+    if content is None:
+        raise HTTPException(status_code=422, detail="content is required")
 
     file_tuples = []
     for f in files:
         data = await f.read()
         file_tuples.append((f.filename or "file", data, f.content_type or "application/octet-stream"))
 
-    return await _run_and_save(session, session_key, content, db, files=file_tuples)
+    return await _run_and_save(
+        session, session_key, content, db,
+        files=file_tuples if file_tuples else None,
+    )
 
 
 @router.post("/sessions/{session_key}/cancel")

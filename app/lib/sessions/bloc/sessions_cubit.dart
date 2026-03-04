@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/attachment.dart';
 import '../../models/session.dart';
 import '../../models/message.dart';
+import 'package:dio/dio.dart';
 import '../../services/api.dart';
 import 'sessions_state.dart';
 
@@ -252,10 +252,13 @@ class SessionsCubit extends Cubit<SessionsState> {
       );
       addMessage(sessionKey, assistantMsg);
       setSending(sessionKey, false);
-    } catch (e) {
-      dev.log('sendMessage failed: $e', name: 'SessionsCubit');
+    } catch (e, st) {
+      if (e is DioException) {
+        print('SEND_MESSAGE_ERROR: ${e.response?.statusCode} ${e.response?.data}');
+      } else {
+        print('SEND_MESSAGE_ERROR: $e\n$st');
+      }
       if (!isClosed) setSending(sessionKey, false);
-      fetchHistory(sessionKey);
     }
   }
 
