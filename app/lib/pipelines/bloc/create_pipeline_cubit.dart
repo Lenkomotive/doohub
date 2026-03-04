@@ -27,13 +27,37 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
   }
 
   Future<void> loadIssues(String repoPath) async {
-    emit(state.copyWith(loadingIssues: true, issues: [], selectedIssueNumbers: {}));
+    emit(state.copyWith(loadingIssues: true, issues: [], selectedIssueNumbers: {}, issuesPage: 1, hasMoreIssues: false));
     try {
-      final data = await api.getIssues(repoPath);
+      final data = await api.getIssues(repoPath, page: 1);
       final issues = (data['issues'] as List).cast<Map<String, dynamic>>();
-      if (!isClosed) emit(state.copyWith(issues: issues, loadingIssues: false));
+      final hasMore = data['has_more'] as bool? ?? false;
+      print('Issues page 1: fetched ${issues.length}, hasMore=$hasMore');
+      if (!isClosed) emit(state.copyWith(issues: issues, loadingIssues: false, issuesPage: 1, hasMoreIssues: hasMore));
     } catch (_) {
       if (!isClosed) emit(state.copyWith(loadingIssues: false));
+    }
+  }
+
+  Future<void> loadMoreIssues() async {
+    if (state.loadingMoreIssues || !state.hasMoreIssues) return;
+    final nextPage = state.issuesPage + 1;
+    emit(state.copyWith(loadingMoreIssues: true));
+    try {
+      final data = await api.getIssues(state.selectedRepo, page: nextPage);
+      final newIssues = (data['issues'] as List).cast<Map<String, dynamic>>();
+      final hasMore = data['has_more'] as bool? ?? false;
+      print('Issues page $nextPage: fetched ${newIssues.length}, hasMore=$hasMore, total=${state.issues.length + newIssues.length}');
+      if (!isClosed) {
+        emit(state.copyWith(
+          issues: [...state.issues, ...newIssues],
+          loadingMoreIssues: false,
+          issuesPage: nextPage,
+          hasMoreIssues: hasMore,
+        ));
+      }
+    } catch (_) {
+      if (!isClosed) emit(state.copyWith(loadingMoreIssues: false));
     }
   }
 

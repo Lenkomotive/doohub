@@ -26,9 +26,11 @@ async def list_repos(_user: User = Depends(get_current_user)):
 @router.get("/repos/issues")
 async def list_repo_issues(
     repo_path: str = Query(...),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
     _user: User = Depends(get_current_user),
 ):
-    return await slave.list_issues(repo_path)
+    return await slave.list_issues(repo_path, page=page, per_page=per_page)
 
 
 @router.get("/repos/issue")

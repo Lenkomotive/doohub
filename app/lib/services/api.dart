@@ -269,8 +269,12 @@ class ApiService {
     return res.data;
   }
 
-  Future<Map<String, dynamic>> getIssues(String repoPath) async {
-    final res = await _dio.get('/repos/issues', queryParameters: {'repo_path': repoPath});
+  Future<Map<String, dynamic>> getIssues(String repoPath, {int page = 1, int perPage = 10}) async {
+    final res = await _dio.get('/repos/issues', queryParameters: {
+      'repo_path': repoPath,
+      'page': page,
+      'per_page': perPage,
+    });
     return res.data;
   }
 

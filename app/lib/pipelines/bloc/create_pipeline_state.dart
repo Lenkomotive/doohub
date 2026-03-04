@@ -8,7 +8,10 @@ class CreatePipelineState extends Equatable {
   final Set<int> selectedIssueNumbers;
   final bool loadingRepos;
   final bool loadingIssues;
+  final bool loadingMoreIssues;
   final bool submitting;
+  final int issuesPage;
+  final bool hasMoreIssues;
 
   const CreatePipelineState({
     this.repos = const [],
@@ -18,7 +21,10 @@ class CreatePipelineState extends Equatable {
     this.selectedIssueNumbers = const {},
     this.loadingRepos = true,
     this.loadingIssues = false,
+    this.loadingMoreIssues = false,
     this.submitting = false,
+    this.issuesPage = 1,
+    this.hasMoreIssues = false,
   });
 
   CreatePipelineState copyWith({
@@ -29,7 +35,10 @@ class CreatePipelineState extends Equatable {
     Set<int>? selectedIssueNumbers,
     bool? loadingRepos,
     bool? loadingIssues,
+    bool? loadingMoreIssues,
     bool? submitting,
+    int? issuesPage,
+    bool? hasMoreIssues,
   }) {
     return CreatePipelineState(
       repos: repos ?? this.repos,
@@ -39,7 +48,10 @@ class CreatePipelineState extends Equatable {
       selectedIssueNumbers: selectedIssueNumbers ?? this.selectedIssueNumbers,
       loadingRepos: loadingRepos ?? this.loadingRepos,
       loadingIssues: loadingIssues ?? this.loadingIssues,
+      loadingMoreIssues: loadingMoreIssues ?? this.loadingMoreIssues,
       submitting: submitting ?? this.submitting,
+      issuesPage: issuesPage ?? this.issuesPage,
+      hasMoreIssues: hasMoreIssues ?? this.hasMoreIssues,
     );
   }
 
@@ -52,6 +64,9 @@ class CreatePipelineState extends Equatable {
         selectedIssueNumbers,
         loadingRepos,
         loadingIssues,
+        loadingMoreIssues,
         submitting,
+        issuesPage,
+        hasMoreIssues,
       ];
 }

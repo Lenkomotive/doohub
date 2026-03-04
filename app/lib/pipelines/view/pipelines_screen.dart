@@ -196,8 +196,34 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _CreatePipelineSheet extends StatelessWidget {
+class _CreatePipelineSheet extends StatefulWidget {
   const _CreatePipelineSheet();
+
+  @override
+  State<_CreatePipelineSheet> createState() => _CreatePipelineSheetState();
+}
+
+class _CreatePipelineSheetState extends State<_CreatePipelineSheet> {
+  final _issueScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _issueScrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _issueScrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_issueScrollController.position.pixels >=
+        _issueScrollController.position.maxScrollExtent - 100) {
+      context.read<CreatePipelineCubit>().loadMoreIssues();
+    }
+  }
 
   void _showIssueDetail(BuildContext context, Map<String, dynamic> issue) {
     final cubit = context.read<CreatePipelineCubit>();
@@ -274,9 +300,16 @@ class _CreatePipelineSheet extends StatelessWidget {
                               ),
                             ))
                           : ListView.builder(
+                              controller: _issueScrollController,
                               shrinkWrap: true,
-                              itemCount: state.issues.length,
+                              itemCount: state.issues.length + (state.hasMoreIssues ? 1 : 0),
                               itemBuilder: (context, index) {
+                                if (index >= state.issues.length) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                                  );
+                                }
                                 final issue = state.issues[index];
                                 final number = issue['number'] as int;
                                 final title = issue['title'] as String? ?? '';

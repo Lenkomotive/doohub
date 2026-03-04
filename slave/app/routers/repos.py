@@ -26,12 +26,16 @@ async def list_repos():
 @router.get("/issues")
 async def list_issues(
     repo_path: str = Query(...),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
 ):
     """List open GitHub issues for a repository via the gh CLI."""
+    # Fetch one extra to detect if there are more pages
+    fetch_limit = page * per_page + 1
     proc = await asyncio.create_subprocess_exec(
         "gh", "issue", "list",
         "--state", "open",
-        "--limit", "30",
+        "--limit", str(fetch_limit),
         "--json", "number,title,labels,state",
         cwd=repo_path,
         stdout=asyncio.subprocess.PIPE,
@@ -43,7 +47,11 @@ async def list_issues(
             status_code=502,
             detail=f"gh issue list failed: {stderr.decode().strip()}",
         )
-    return {"issues": json.loads(stdout.decode())}
+    all_issues = json.loads(stdout.decode())
+    start = (page - 1) * per_page
+    page_issues = all_issues[start : start + per_page]
+    has_more = len(all_issues) > start + per_page
+    return {"issues": page_issues, "has_more": has_more, "page": page}
 
 
 @router.get("/issue")
