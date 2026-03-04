@@ -29,7 +29,7 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
   Future<void> loadIssues(String repoPath) async {
     emit(state.copyWith(loadingIssues: true, issues: [], selectedIssueNumbers: {}, issuesPage: 1, hasMoreIssues: false));
     try {
-      final data = await api.getIssues(repoPath, page: 1);
+      final data = await api.getIssues(repoPath, page: 1, perPage: 30);
       final issues = (data['issues'] as List).cast<Map<String, dynamic>>();
       final hasMore = data['has_more'] as bool? ?? false;
       print('Issues page 1: fetched ${issues.length}, hasMore=$hasMore');
@@ -44,7 +44,7 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
     final nextPage = state.issuesPage + 1;
     emit(state.copyWith(loadingMoreIssues: true));
     try {
-      final data = await api.getIssues(state.selectedRepo, page: nextPage);
+      final data = await api.getIssues(state.selectedRepo, page: nextPage, perPage: 20);
       final newIssues = (data['issues'] as List).cast<Map<String, dynamic>>();
       final hasMore = data['has_more'] as bool? ?? false;
       print('Issues page $nextPage: fetched ${newIssues.length}, hasMore=$hasMore, total=${state.issues.length + newIssues.length}');
