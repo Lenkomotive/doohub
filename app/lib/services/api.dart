@@ -137,9 +137,10 @@ class ApiService {
     return res.data;
   }
 
-  Future<Map<String, dynamic>> sendMessage(String key, String content) async {
+  Future<Map<String, dynamic>> sendMessage(String key, String content, {List<String>? images}) async {
     final res = await _dio.post('/sessions/$key/messages', data: {
       'content': content,
+      if (images != null && images.isNotEmpty) 'images': images,
     });
     return res.data;
   }

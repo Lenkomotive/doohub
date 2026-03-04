@@ -90,8 +90,9 @@ class SlaveClient:
         claude_session_id: str | None,
         interactive: bool = False,
         timeout: int = 300,
+        images: list[str] | None = None,
     ) -> Any:
-        return await self._request("POST", "/api/run", json={
+        payload: dict[str, Any] = {
             "session_key": session_key,
             "message": message,
             "project_path": project_path,
@@ -99,7 +100,10 @@ class SlaveClient:
             "claude_session_id": claude_session_id,
             "interactive": interactive,
             "timeout": timeout,
-        })
+        }
+        if images:
+            payload["images"] = images
+        return await self._request("POST", "/api/run", json=payload)
 
     async def stream_events(self) -> AsyncGenerator[dict, None]:
         async for event in self._stream_sse("GET", "/api/events"):

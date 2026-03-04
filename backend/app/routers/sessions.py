@@ -179,7 +179,11 @@ async def send_message(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    db.add(SessionMessage(session_id=session.id, role="user", content=body.content))
+    image_urls_json = json.dumps(body.images) if body.images else None
+    db.add(SessionMessage(
+        session_id=session.id, role="user", content=body.content,
+        image_urls=image_urls_json,
+    ))
     db.commit()
 
     result = await slave.run(
@@ -189,6 +193,7 @@ async def send_message(
         model=session.model,
         claude_session_id=session.claude_session_id,
         interactive=session.interactive,
+        images=body.images,
     )
 
     response_text = (result.get("result") or result.get("error") or "").strip()
@@ -245,7 +250,13 @@ def get_message_history(
     )
     return {
         "messages": [
-            {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "image_urls": json.loads(m.image_urls) if m.image_urls else None,
+                "created_at": m.created_at.isoformat(),
+            }
             for m in messages
         ],
         "total": total,

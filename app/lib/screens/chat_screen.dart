@@ -1,5 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../models/session.dart';
 import '../models/message.dart';
 import '../bloc/sessions/sessions_cubit.dart';
@@ -17,7 +23,9 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
+  final _imagePicker = ImagePicker();
   bool _showScrollToBottom = false;
+  List<XFile> _pendingImages = [];
 
   @override
   void initState() {
@@ -37,11 +45,82 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  void _showImageSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Photo Library'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickMultipleImages();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final image = await _imagePicker.pickImage(source: source, maxWidth: 1024, imageQuality: 80);
+    if (image != null) {
+      setState(() => _pendingImages = [..._pendingImages, image]);
+    }
+  }
+
+  Future<void> _pickMultipleImages() async {
+    final images = await _imagePicker.pickMultiImage(maxWidth: 1024, imageQuality: 80, limit: 5);
+    if (images.isNotEmpty) {
+      final remaining = 5 - _pendingImages.length;
+      final toAdd = images.take(remaining).toList();
+      setState(() => _pendingImages = [..._pendingImages, ...toAdd]);
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _pendingImages = List.from(_pendingImages)..removeAt(index);
+    });
+  }
+
+  Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
-    if (text.isEmpty) return;
+    final hasImages = _pendingImages.isNotEmpty;
+    if (text.isEmpty && !hasImages) return;
+
+    List<String>? imageDataUris;
+    if (hasImages) {
+      imageDataUris = [];
+      for (final file in _pendingImages) {
+        final bytes = await file.readAsBytes();
+        final ext = file.name.split('.').last.toLowerCase();
+        final mime = ext == 'png' ? 'image/png' : 'image/jpeg';
+        imageDataUris.add('data:$mime;base64,${base64Encode(bytes)}');
+      }
+    }
+
     _inputController.clear();
-    context.read<SessionsCubit>().sendMessage(widget.sessionKey, text);
+    setState(() => _pendingImages = []);
+
+    if (!mounted) return;
+    context.read<SessionsCubit>().sendMessage(
+      widget.sessionKey,
+      text,
+      images: imageDataUris,
+    );
   }
 
   @override
@@ -148,6 +227,53 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
               ),
 
+              // Image preview strip
+              if (_pendingImages.isNotEmpty)
+                Container(
+                  height: 80,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: Colors.grey.shade800, width: 0.5)),
+                  ),
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _pendingImages.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                File(_pendingImages[index].path),
+                                width: 68,
+                                height: 68,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: () => _removeImage(index),
+                                child: Container(
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  padding: const EdgeInsets.all(2),
+                                  child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
               Container(
                 padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
                 decoration: BoxDecoration(
@@ -156,6 +282,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    SizedBox(
+                      height: 40,
+                      width: 40,
+                      child: IconButton(
+                        onPressed: session.sending ? null : _showImageSourceSheet,
+                        icon: const Icon(Icons.add_photo_alternate_outlined, size: 22),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: TextField(
                         controller: _inputController,
@@ -209,6 +345,7 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == 'user';
+    final images = message.imageUrls;
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -222,12 +359,64 @@ class _MessageBubble extends StatelessWidget {
               : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: SelectableText(
-          message.content,
-          style: TextStyle(
-            fontSize: 14,
-            color: isUser ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (images != null && images.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(bottom: message.content.isNotEmpty ? 8 : 0),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: images.map((url) {
+                    final bytes = _decodeDataUri(url);
+                    if (bytes == null) return const SizedBox.shrink();
+                    return GestureDetector(
+                      onTap: () => _showFullImage(context, bytes),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          bytes,
+                          width: images.length == 1 ? 220 : 120,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            if (message.content.isNotEmpty)
+              SelectableText(
+                message.content,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isUser ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Uint8List? _decodeDataUri(String uri) {
+    final match = RegExp(r'^data:[^;]+;base64,(.+)$').firstMatch(uri);
+    if (match == null) return null;
+    try {
+      return base64Decode(match.group(1)!);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _showFullImage(BuildContext context, Uint8List bytes) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: InteractiveViewer(
+          child: Image.memory(bytes),
         ),
       ),
     );

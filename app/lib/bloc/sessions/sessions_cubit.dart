@@ -190,14 +190,16 @@ class SessionsCubit extends Cubit<SessionsState> {
     _updateSession(sessionKey, (s) => s.copyWith(sending: sending));
   }
 
-  Future<void> sendMessage(String sessionKey, String content) async {
+  Future<void> sendMessage(String sessionKey, String content, {List<String>? images}) async {
     final session = state.sessionByKey(sessionKey);
-    if (content.isEmpty || (session?.sending ?? false)) return;
+    final hasContent = content.isNotEmpty || (images != null && images.isNotEmpty);
+    if (!hasContent || (session?.sending ?? false)) return;
 
     final userMsg = Message(
       id: DateTime.now().millisecondsSinceEpoch,
       role: 'user',
       content: content,
+      imageUrls: images,
       createdAt: DateTime.now(),
     );
 
@@ -205,7 +207,7 @@ class SessionsCubit extends Cubit<SessionsState> {
     setSending(sessionKey, true);
 
     try {
-      final data = await api.sendMessage(sessionKey, content);
+      final data = await api.sendMessage(sessionKey, content, images: images);
       if (isClosed) return;
       final responseText = data['content'] as String? ?? '';
       final assistantMsg = Message(

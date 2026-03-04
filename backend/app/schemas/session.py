@@ -10,3 +10,4 @@ class CreateSessionRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str
+    images: list[str] | None = None
