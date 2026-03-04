@@ -1,3 +1,4 @@
+import 'attachment.dart';
 import 'message.dart';
 
 enum ChatStatus { initial, loading, loaded, error }
@@ -13,6 +14,7 @@ class Session {
   final List<Message> messages;
   final bool sending;
   final ChatStatus chatStatus;
+  final List<Attachment> pendingAttachments;
 
   Session({
     required this.sessionKey,
@@ -25,6 +27,7 @@ class Session {
     this.messages = const [],
     this.sending = false,
     this.chatStatus = ChatStatus.initial,
+    this.pendingAttachments = const [],
   });
 
   factory Session.fromJson(Map<String, dynamic> json) {
@@ -44,6 +47,7 @@ class Session {
     List<Message>? messages,
     bool? sending,
     ChatStatus? chatStatus,
+    List<Attachment>? pendingAttachments,
   }) {
     return Session(
       sessionKey: sessionKey,
@@ -56,6 +60,7 @@ class Session {
       messages: messages ?? this.messages,
       sending: sending ?? this.sending,
       chatStatus: chatStatus ?? this.chatStatus,
+      pendingAttachments: pendingAttachments ?? this.pendingAttachments,
     );
   }
 }

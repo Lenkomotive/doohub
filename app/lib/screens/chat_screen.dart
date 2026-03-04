@@ -1,5 +1,10 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../models/attachment.dart';
 import '../models/session.dart';
 import '../models/message.dart';
 import '../bloc/sessions/sessions_cubit.dart';
@@ -39,9 +44,49 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _sendMessage() {
     final text = _inputController.text.trim();
-    if (text.isEmpty) return;
+    final session = context.read<SessionsCubit>().state.sessionByKey(widget.sessionKey);
+    final hasPending = session?.pendingAttachments.isNotEmpty ?? false;
+    if (text.isEmpty && !hasPending) return;
     _inputController.clear();
     context.read<SessionsCubit>().sendMessage(widget.sessionKey, text);
+  }
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'txt', 'md'],
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.path == null) return;
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File too large. Maximum size is 10MB.')),
+        );
+      }
+      return;
+    }
+
+    final mimeType = switch (file.extension?.toLowerCase()) {
+      'pdf' => 'application/pdf',
+      'txt' => 'text/plain',
+      'md' => 'text/markdown',
+      _ => 'application/octet-stream',
+    };
+
+    final attachment = Attachment(
+      filename: file.name,
+      mimeType: mimeType,
+      fileSize: file.size,
+      localPath: file.path,
+    );
+
+    if (mounted) {
+      context.read<SessionsCubit>().addPendingAttachment(widget.sessionKey, attachment);
+    }
   }
 
   @override
@@ -56,6 +101,7 @@ class _ChatScreenState extends State<ChatScreen> {
         final cubit = context.read<SessionsCubit>();
         final status = session.sending ? 'busy' : session.status;
         final messages = session.messages;
+        final pendingAttachments = session.pendingAttachments;
 
         return Scaffold(
           appBar: AppBar(
@@ -148,6 +194,24 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
               ),
 
+              // Pending attachments chips
+              if (pendingAttachments.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (var i = 0; i < pendingAttachments.length; i++)
+                        _PendingAttachmentChip(
+                          attachment: pendingAttachments[i],
+                          onRemove: () => cubit.removePendingAttachment(widget.sessionKey, i),
+                        ),
+                    ],
+                  ),
+                ),
+
               Container(
                 padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
                 decoration: BoxDecoration(
@@ -156,6 +220,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    SizedBox(
+                      height: 40,
+                      width: 40,
+                      child: IconButton(
+                        onPressed: session.sending || pendingAttachments.length >= 5 ? null : _pickFile,
+                        icon: const Icon(Icons.attach_file, size: 20),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: TextField(
                         controller: _inputController,
@@ -201,6 +275,113 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
+class _PendingAttachmentChip extends StatelessWidget {
+  final Attachment attachment;
+  final VoidCallback onRemove;
+
+  const _PendingAttachmentChip({required this.attachment, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: Icon(_iconForExtension(attachment.extension), size: 16),
+      label: Text(
+        '${_truncate(attachment.filename, 20)} (${attachment.fileSizeFormatted})',
+        style: const TextStyle(fontSize: 12),
+      ),
+      deleteIcon: const Icon(Icons.close, size: 16),
+      onDeleted: onRemove,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
+class _AttachmentCard extends StatelessWidget {
+  final Attachment attachment;
+  final bool isUser;
+
+  const _AttachmentCard({required this.attachment, required this.isUser});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        final url = attachment.url;
+        if (url != null) {
+          launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: (isUser
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : Theme.of(context).colorScheme.onSurface)
+              .withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _iconForExtension(attachment.extension),
+              size: 18,
+              color: isUser
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : Theme.of(context).colorScheme.onSurface,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    attachment.filename,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: isUser
+                          ? Theme.of(context).colorScheme.onPrimary
+                          : Theme.of(context).colorScheme.onSurface,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    attachment.fileSizeFormatted,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: (isUser
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).colorScheme.onSurface)
+                          .withValues(alpha: 0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+IconData _iconForExtension(String ext) {
+  return switch (ext) {
+    'pdf' => Icons.picture_as_pdf,
+    'txt' => Icons.description,
+    'md' => Icons.article,
+    _ => Icons.insert_drive_file,
+  };
+}
+
+String _truncate(String text, int maxLen) {
+  if (text.length <= maxLen) return text;
+  return '${text.substring(0, maxLen)}...';
+}
+
 class _MessageBubble extends StatelessWidget {
   final Message message;
 
@@ -222,12 +403,20 @@ class _MessageBubble extends StatelessWidget {
               : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: SelectableText(
-          message.content,
-          style: TextStyle(
-            fontSize: 14,
-            color: isUser ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (message.content.isNotEmpty)
+              SelectableText(
+                message.content,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isUser ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            for (final att in message.attachments)
+              _AttachmentCard(attachment: att, isUser: isUser),
+          ],
         ),
       ),
     );
