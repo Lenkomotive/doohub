@@ -77,7 +77,7 @@ class PipelinesCubit extends Cubit<PipelinesState> {
     required String repoPath,
     int? issueNumber,
     String? taskDescription,
-    String model = 'claude-sonnet-4-6',
+    String model = 'claude-opus-4-6',
   }) async {
     final data = await api.createPipeline(
       repoPath: repoPath,

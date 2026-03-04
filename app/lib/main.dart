@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api.dart';
-import 'bloc/auth/auth_bloc.dart';
-import 'bloc/auth/auth_state.dart';
-import 'bloc/theme/theme_cubit.dart';
-import 'screens/login_screen.dart';
-import 'screens/home_screen.dart';
+import 'auth/bloc/auth_bloc.dart';
+import 'auth/bloc/auth_state.dart';
+import 'theme/bloc/theme_cubit.dart';
+import 'auth/view/login_screen.dart';
+import 'home/view/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

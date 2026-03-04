@@ -127,6 +127,35 @@ async def _cleanup_worktree(repo_path: str, worktree_path: str) -> None:
     await _run_git(repo_path, "worktree", "prune")
 
 
+# ── Cleanup ──────────────────────────────────────────────────────────────────
+
+
+async def _cancel_cleanup(ctx: dict) -> None:
+    """Close PR and remove worktree on cancellation."""
+    repo_path = ctx["repo_path"]
+    key = ctx["pipeline_key"]
+
+    # Close the PR if one was opened
+    pr_number = ctx.get("pr_number")
+    if pr_number:
+        logger.info("Pipeline %s: closing PR #%d", key, pr_number)
+        await _run_gh(
+            repo_path, "pr", "close", str(pr_number),
+            "--comment", "Pipeline cancelled.",
+        )
+
+    # Remove worktree
+    branch = ctx.get("branch")
+    slug = re.sub(r"[^a-z0-9]+", "-", key.lower()).strip("-")
+    worktree_path = str(WORKTREE_DIR / slug)
+    await _cleanup_worktree(repo_path, worktree_path)
+
+    # Delete remote branch
+    if branch:
+        logger.info("Pipeline %s: deleting branch %s", key, branch)
+        await _run_git(repo_path, "push", "origin", "--delete", branch)
+
+
 # ── Agent Runners ────────────────────────────────────────────────────────────
 
 
@@ -358,12 +387,16 @@ async def _run_pipeline(ctx: dict) -> None:
         })
 
     except asyncio.CancelledError:
+        logger.info("Pipeline %s cancelled — cleaning up", key)
+        await _cancel_cleanup(ctx)
         await _callback(cb_url, api_key, {
             "pipeline_key": key, "status": "cancelled",
         })
         raise
     except Exception as e:
         logger.error("Pipeline %s error: %s", key, e, exc_info=True)
+        slug = re.sub(r"[^a-z0-9]+", "-", key.lower()).strip("-")
+        await _cleanup_worktree(repo_path, str(WORKTREE_DIR / slug))
         await _callback(cb_url, api_key, {
             "pipeline_key": key, "status": "failed", "error": str(e),
         })

@@ -23,7 +23,7 @@ class Pipeline(Base):
     pr_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_round: Mapped[int] = mapped_column(Integer, default=0)
-    model: Mapped[str] = mapped_column(String(50), default="claude-sonnet-4-6")
+    model: Mapped[str] = mapped_column(String(50), default="claude-opus-4-6")
     total_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     claude_session_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

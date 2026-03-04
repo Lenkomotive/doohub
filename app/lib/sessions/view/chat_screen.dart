@@ -4,11 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/attachment.dart';
-import '../models/session.dart';
-import '../models/message.dart';
-import '../bloc/sessions/sessions_cubit.dart';
-import '../bloc/sessions/sessions_state.dart';
+import '../../models/attachment.dart';
+import '../../models/session.dart';
+import '../../models/message.dart';
+import '../bloc/sessions_cubit.dart';
+import '../bloc/sessions_state.dart';
 
 class ChatScreen extends StatefulWidget {
   final String sessionKey;

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/pipeline.dart';
-import '../bloc/pipelines/pipelines_cubit.dart';
-import '../bloc/pipelines/pipelines_state.dart';
+import '../../models/pipeline.dart';
+import '../bloc/pipelines_cubit.dart';
+import '../bloc/pipelines_state.dart';
 
 class PipelineDetailScreen extends StatelessWidget {
   final String pipelineKey;

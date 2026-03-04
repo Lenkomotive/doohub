@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../models/session.dart';
-import '../services/api.dart';
-import '../bloc/sessions/sessions_cubit.dart';
-import '../bloc/sessions/sessions_state.dart';
+import '../../models/session.dart';
+import '../../services/api.dart';
+import '../bloc/sessions_cubit.dart';
+import '../bloc/sessions_state.dart';
 import 'chat_screen.dart';
 
 class SessionsScreen extends StatelessWidget {

@@ -5,7 +5,7 @@ class CreatePipelineRequest(BaseModel):
     repo_path: str
     issue_number: int | None = None
     task_description: str | None = None
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-opus-4-6"
 
 
 class PipelineCallbackRequest(BaseModel):

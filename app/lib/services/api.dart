@@ -218,7 +218,7 @@ class ApiService {
     required String repoPath,
     int? issueNumber,
     String? taskDescription,
-    String model = 'claude-sonnet-4-6',
+    String model = 'claude-opus-4-6',
   }) async {
     final res = await _dio.post('/pipelines', data: {
       'repo_path': repoPath,
