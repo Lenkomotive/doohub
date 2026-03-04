@@ -47,6 +47,8 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DooHub needs access to your photo library to attach images and files.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
