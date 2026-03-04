@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/attachment.dart';
@@ -230,20 +231,16 @@ class SessionsCubit extends Cubit<SessionsState> {
     ));
 
     try {
-      // Upload pending attachments
-      final attachmentIds = <int>[];
-      for (final att in pending) {
-        if (att.localPath != null) {
-          final result = await api.uploadAttachment(sessionKey, File(att.localPath!));
-          final id = result['id'] as int?;
-          if (id != null) attachmentIds.add(id);
-        }
-      }
+      // Collect files from pending attachments
+      final files = <File>[
+        for (final att in pending)
+          if (att.localPath != null) File(att.localPath!),
+      ];
 
       final data = await api.sendMessage(
         sessionKey,
         content,
-        attachmentIds: attachmentIds.isNotEmpty ? attachmentIds : null,
+        files: files.isNotEmpty ? files : null,
       );
       if (isClosed) return;
       final responseText = data['content'] as String? ?? '';
@@ -255,7 +252,8 @@ class SessionsCubit extends Cubit<SessionsState> {
       );
       addMessage(sessionKey, assistantMsg);
       setSending(sessionKey, false);
-    } catch (_) {
+    } catch (e) {
+      dev.log('sendMessage failed: $e', name: 'SessionsCubit');
       if (!isClosed) setSending(sessionKey, false);
       fetchHistory(sessionKey);
     }

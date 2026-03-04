@@ -1,7 +1,7 @@
 import json
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session as DBSession
 
@@ -168,29 +168,19 @@ async def delete_session(
     db.commit()
 
 
-@router.post("/sessions/{session_key}/messages")
-async def send_message(
-    session_key: str,
-    body: SendMessageRequest,
-    db: DBSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    session = db.query(Session).filter(
-        Session.session_key == session_key, Session.user_id == user.id
-    ).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    db.add(SessionMessage(session_id=session.id, role="user", content=body.content))
+async def _run_and_save(session, session_key, content, db, files=None):
+    """Send message to slave and save response. Shared by JSON and multipart endpoints."""
+    db.add(SessionMessage(session_id=session.id, role="user", content=content))
     db.commit()
 
     result = await slave.run(
         session_key=session_key,
-        message=body.content,
+        message=content,
         project_path=session.project_path,
         model=session.model,
         claude_session_id=session.claude_session_id,
         interactive=session.interactive,
+        files=files,
     )
 
     response_text = (result.get("result") or result.get("error") or "").strip()
@@ -206,6 +196,43 @@ async def send_message(
         "session_id": new_claude_sid,
         "cost_usd": result.get("cost_usd"),
     }
+
+
+@router.post("/sessions/{session_key}/messages")
+async def send_message(
+    session_key: str,
+    body: SendMessageRequest,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session = db.query(Session).filter(
+        Session.session_key == session_key, Session.user_id == user.id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return await _run_and_save(session, session_key, body.content, db)
+
+
+@router.post("/sessions/{session_key}/messages/files")
+async def send_message_with_files(
+    session_key: str,
+    content: str = Form(...),
+    files: list[UploadFile] = File(...),
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session = db.query(Session).filter(
+        Session.session_key == session_key, Session.user_id == user.id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    file_tuples = []
+    for f in files:
+        data = await f.read()
+        file_tuples.append((f.filename or "file", data, f.content_type or "application/octet-stream"))
+
+    return await _run_and_save(session, session_key, content, db, files=file_tuples)
 
 
 @router.post("/sessions/{session_key}/cancel")

@@ -90,7 +90,28 @@ class SlaveClient:
         claude_session_id: str | None,
         interactive: bool = False,
         timeout: int = 300,
+        files: list[tuple[str, bytes, str]] | None = None,
     ) -> Any:
+        if files:
+            multipart_files = [
+                ("files", (fname, data, ctype)) for fname, data, ctype in files
+            ]
+            form_data = {
+                "session_key": session_key,
+                "message": message,
+                "project_path": project_path,
+                "model": model,
+                "interactive": str(interactive).lower(),
+                "timeout": str(timeout),
+            }
+            if claude_session_id:
+                form_data["claude_session_id"] = claude_session_id
+            return await self._request(
+                "POST",
+                "/api/run/files",
+                data=form_data,
+                files=multipart_files,
+            )
         return await self._request("POST", "/api/run", json={
             "session_key": session_key,
             "message": message,
@@ -102,11 +123,11 @@ class SlaveClient:
         })
 
     async def stream_events(self) -> AsyncGenerator[dict, None]:
-        async for event in self._stream_sse("GET", "/api/events"):
+        async for event in self._stream_sse("GET", "/api/sessions/events"):
             yield event
 
     async def cancel(self, key: str) -> Any:
-        return await self._request("POST", f"/api/cancel/{key}")
+        return await self._request("POST", f"/api/sessions/{key}/cancel")
 
     async def list_repos(self) -> Any:
         return await self._request("GET", "/api/repos")
