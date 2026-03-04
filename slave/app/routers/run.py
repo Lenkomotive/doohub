@@ -1,8 +1,9 @@
 import asyncio
 import json
 import logging
+import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -70,6 +71,59 @@ async def run(req: RunRequest):
         )
     finally:
         await _set_status(req.session_key, "idle")
+
+    return result
+
+
+@router.post("/run/files")
+async def run_with_files(
+    session_key: str = Form(...),
+    message: str = Form(...),
+    project_path: str = Form("/projects"),
+    model: str = Form("claude-opus-4-6"),
+    claude_session_id: str = Form(None),
+    interactive: bool = Form(False),
+    timeout: int = Form(300),
+    files: list[UploadFile] = File(default=[]),
+):
+    """Blocking Claude run with file attachments."""
+    if session_key in busy_keys():
+        raise HTTPException(status_code=409, detail="Session is busy")
+
+    # Save files to project dir for Claude to read
+    saved_files = []
+    file_prompts = []
+    for f in files:
+        filename = f.filename or f"_upload_{int(asyncio.get_event_loop().time() * 1000)}"
+        filepath = os.path.join(project_path, filename)
+        data = await f.read()
+        with open(filepath, "wb") as fh:
+            fh.write(data)
+        saved_files.append(filepath)
+        file_prompts.append(f"Read this file: {filepath}")
+        logger.info("FILE | saved to %s (%s, %d bytes)", filepath, f.content_type, len(data))
+
+    prompt = "\n".join(file_prompts + [message]) if file_prompts else message
+
+    from app.runner import _set_status
+    await _set_status(session_key, "busy")
+    try:
+        result = await claude_runner.run_prompt(
+            prompt=prompt,
+            project_path=project_path,
+            model=model,
+            claude_session_id=claude_session_id,
+            timeout=timeout,
+            session_key=session_key,
+            interactive=interactive,
+        )
+    finally:
+        await _set_status(session_key, "idle")
+        for fp in saved_files:
+            try:
+                os.remove(fp)
+            except OSError:
+                pass
 
     return result
 
