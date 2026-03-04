@@ -444,3 +444,29 @@ def cancel(pipeline_key: str) -> bool:
 
 def running_keys() -> list[str]:
     return [k for k, t in _tasks.items() if not t.done()]
+
+
+async def cleanup(pipeline_key: str, repo_path: str, branch: str | None, pr_number: int | None) -> None:
+    """Clean up worktree, PR, and branch for a pipeline (called on delete)."""
+    # Cancel if still running
+    cancelled = cancel(pipeline_key)
+    if cancelled:
+        # Give the cancel handler a moment to run
+        await asyncio.sleep(2)
+
+    slug = re.sub(r"[^a-z0-9]+", "-", pipeline_key.lower()).strip("-")
+    worktree_path = str(WORKTREE_DIR / slug)
+
+    # Close PR
+    if pr_number and repo_path:
+        logger.info("Cleanup %s: closing PR #%d", pipeline_key, pr_number)
+        await _run_gh(repo_path, "pr", "close", str(pr_number), "--comment", "Pipeline deleted.")
+
+    # Remove worktree
+    if repo_path:
+        await _cleanup_worktree(repo_path, worktree_path)
+
+    # Delete remote branch
+    if branch and repo_path:
+        logger.info("Cleanup %s: deleting branch %s", pipeline_key, branch)
+        await _run_git(repo_path, "push", "origin", "--delete", branch)

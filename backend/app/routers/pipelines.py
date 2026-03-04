@@ -140,6 +140,18 @@ async def delete_pipeline(
     user: User = Depends(get_current_user),
 ):
     pipeline = _get_user_pipeline(db, pipeline_key, user.id)
+
+    # Clean up worktree, PR, and branch on the slave
+    try:
+        await slave.cleanup_pipeline(
+            pipeline_key=pipeline_key,
+            repo_path=pipeline.repo_path,
+            branch=pipeline.branch,
+            pr_number=pipeline.pr_number,
+        )
+    except HTTPException:
+        logger.warning("Cleanup failed for pipeline %s, deleting anyway", pipeline_key)
+
     db.delete(pipeline)
     db.commit()
 

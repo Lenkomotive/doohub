@@ -41,6 +41,23 @@ async def cancel_pipeline(pipeline_key: str):
     raise HTTPException(status_code=404, detail="Pipeline not running")
 
 
+class CleanupRequest(BaseModel):
+    repo_path: str
+    branch: str | None = None
+    pr_number: int | None = None
+
+
+@router.post("/{pipeline_key}/cleanup")
+async def cleanup_pipeline(pipeline_key: str, body: CleanupRequest):
+    await orchestrator.cleanup(
+        pipeline_key=pipeline_key,
+        repo_path=body.repo_path,
+        branch=body.branch,
+        pr_number=body.pr_number,
+    )
+    return {"status": "cleaned"}
+
+
 @router.get("/status")
 async def list_running():
     return {"running": orchestrator.running_keys()}
