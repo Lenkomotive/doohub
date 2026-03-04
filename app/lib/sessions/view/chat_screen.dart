@@ -219,16 +219,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    SizedBox(
-                      height: 40,
-                      width: 40,
-                      child: IconButton(
-                        onPressed: session.sending || pendingAttachments.length >= 5 ? null : _pickFile,
-                        icon: const Icon(Icons.attach_file, size: 20),
-                        padding: EdgeInsets.zero,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
                     Expanded(
                       child: TextField(
                         controller: _inputController,
