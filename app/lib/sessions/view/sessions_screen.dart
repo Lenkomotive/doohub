@@ -189,7 +189,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
           Text('New Session', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            value: _selectedModel,
+            initialValue: _selectedModel,
             decoration: const InputDecoration(labelText: 'Model', border: OutlineInputBorder()),
             items: const [
               DropdownMenuItem(value: 'sonnet', child: Text('Sonnet')),
@@ -203,7 +203,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
             const Center(child: CircularProgressIndicator())
           else
             DropdownButtonFormField<String>(
-              value: _selectedProject,
+              initialValue: _selectedProject,
               decoration: const InputDecoration(labelText: 'Project', border: OutlineInputBorder()),
               items: projectItems,
               onChanged: (v) => setState(() => _selectedProject = v ?? ''),

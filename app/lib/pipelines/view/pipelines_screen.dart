@@ -269,14 +269,14 @@ class _CreatePipelineSheetState extends State<_CreatePipelineSheet> {
                   const Center(child: CircularProgressIndicator())
                 else
                   DropdownButtonFormField<String>(
-                    value: state.selectedRepo.isNotEmpty ? state.selectedRepo : null,
+                    initialValue: state.selectedRepo.isNotEmpty ? state.selectedRepo : null,
                     decoration: const InputDecoration(labelText: 'Repository', border: OutlineInputBorder()),
                     items: state.repos.map((r) => DropdownMenuItem(value: r, child: Text(r.split('/').last))).toList(),
                     onChanged: (v) => cubit.selectRepo(v ?? ''),
                   ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: state.selectedModel,
+                  initialValue: state.selectedModel,
                   decoration: const InputDecoration(labelText: 'Model', border: OutlineInputBorder()),
                   items: const [
                     DropdownMenuItem(value: 'claude-sonnet-4-6', child: Text('Sonnet')),
