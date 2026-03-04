@@ -138,10 +138,16 @@ class ApiService {
     return res.data;
   }
 
-  Future<Map<String, dynamic>> sendMessage(String key, String content) async {
-    final res = await _dio.post('/sessions/$key/messages', data: {
+  Future<Map<String, dynamic>> sendMessage(String key, String content, {List<File>? files}) async {
+    final formData = FormData.fromMap({
       'content': content,
+      if (files != null)
+        'files': [
+          for (final f in files)
+            await MultipartFile.fromFile(f.path, filename: f.path.split('/').last),
+        ],
     });
+    final res = await _dio.post('/sessions/$key/messages', data: formData);
     return res.data;
   }
 

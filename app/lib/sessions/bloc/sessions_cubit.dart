@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/attachment.dart';
 import '../../models/session.dart';
@@ -215,20 +216,35 @@ class SessionsCubit extends Cubit<SessionsState> {
   Future<void> sendMessage(String sessionKey, String content) async {
     final session = state.sessionByKey(sessionKey);
     if (session?.sending ?? false) return;
-    if (content.isEmpty) return;
+
+    final attachments = session?.pendingAttachments ?? const [];
+    if (content.isEmpty && attachments.isEmpty) return;
 
     final userMsg = Message(
       id: DateTime.now().millisecondsSinceEpoch,
       role: 'user',
       content: content,
       createdAt: DateTime.now(),
+      attachments: attachments,
     );
 
     addMessage(sessionKey, userMsg);
     setSending(sessionKey, true);
+    // Clear pending attachments
+    _updateSession(sessionKey, (s) => s.copyWith(pendingAttachments: []));
+
+    // Collect files from attachments
+    final files = attachments
+        .where((a) => a.localPath != null)
+        .map((a) => File(a.localPath!))
+        .toList();
 
     try {
-      final data = await api.sendMessage(sessionKey, content);
+      final data = await api.sendMessage(
+        sessionKey,
+        content,
+        files: files.isNotEmpty ? files : null,
+      );
       if (isClosed) return;
       final responseText = data['content'] as String? ?? '';
       final assistantMsg = Message(
