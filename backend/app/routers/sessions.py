@@ -191,7 +191,7 @@ async def send_message(
         interactive=session.interactive,
     )
 
-    response_text = result.get("result") or result.get("error") or ""
+    response_text = (result.get("result") or result.get("error") or "").strip()
     new_claude_sid = result.get("session_id")
     if new_claude_sid:
         session.claude_session_id = new_claude_sid
