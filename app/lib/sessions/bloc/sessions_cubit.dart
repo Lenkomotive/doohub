@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../models/attachment.dart';
 import '../../models/session.dart';
 import '../../models/message.dart';
-import 'package:dio/dio.dart';
 import '../../services/api.dart';
 import 'sessions_state.dart';
 
@@ -20,6 +18,8 @@ class SessionsCubit extends Cubit<SessionsState> {
   // ── SSE ──
 
   void _subscribeToEvents() {
+    _eventSub?.cancel();
+    if (isClosed) return;
     _eventSub = api.sessionEvents().listen(
       (event) {
         if (isClosed) return;
@@ -85,12 +85,15 @@ class SessionsCubit extends Cubit<SessionsState> {
         }
       },
       onError: (_) {
+        if (isClosed) return;
         fetchSessions();
         Future.delayed(const Duration(seconds: 5), _subscribeToEvents);
       },
       onDone: () {
-        Future.delayed(const Duration(seconds: 3), _subscribeToEvents);
+        if (isClosed) return;
+        Future.delayed(const Duration(seconds: 5), _subscribeToEvents);
       },
+      cancelOnError: true,
     );
   }
 
@@ -212,36 +215,20 @@ class SessionsCubit extends Cubit<SessionsState> {
   Future<void> sendMessage(String sessionKey, String content) async {
     final session = state.sessionByKey(sessionKey);
     if (session?.sending ?? false) return;
-
-    final pending = session?.pendingAttachments ?? [];
-    if (content.isEmpty && pending.isEmpty) return;
+    if (content.isEmpty) return;
 
     final userMsg = Message(
       id: DateTime.now().millisecondsSinceEpoch,
       role: 'user',
       content: content,
       createdAt: DateTime.now(),
-      attachments: pending,
     );
 
     addMessage(sessionKey, userMsg);
-    _updateSession(sessionKey, (s) => s.copyWith(
-      sending: true,
-      pendingAttachments: const [],
-    ));
+    setSending(sessionKey, true);
 
     try {
-      // Collect files from pending attachments
-      final files = <File>[
-        for (final att in pending)
-          if (att.localPath != null) File(att.localPath!),
-      ];
-
-      final data = await api.sendMessage(
-        sessionKey,
-        content,
-        files: files.isNotEmpty ? files : null,
-      );
+      final data = await api.sendMessage(sessionKey, content);
       if (isClosed) return;
       final responseText = data['content'] as String? ?? '';
       final assistantMsg = Message(
@@ -252,13 +239,9 @@ class SessionsCubit extends Cubit<SessionsState> {
       );
       addMessage(sessionKey, assistantMsg);
       setSending(sessionKey, false);
-    } catch (e, st) {
-      if (e is DioException) {
-        print('SEND_MESSAGE_ERROR: ${e.response?.statusCode} ${e.response?.data}');
-      } else {
-        print('SEND_MESSAGE_ERROR: $e\n$st');
-      }
+    } catch (_) {
       if (!isClosed) setSending(sessionKey, false);
+      fetchHistory(sessionKey);
     }
   }
 

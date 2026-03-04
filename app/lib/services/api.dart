@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+
 class ApiService {
   static const _storage = FlutterSecureStorage();
   late final Dio _dio;
@@ -15,7 +16,7 @@ class ApiService {
       baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 300),
-      contentType: 'application/json',
+      headers: {'Content-Type': 'application/json'},
     ));
 
     _dio.interceptors.add(InterceptorsWrapper(
@@ -137,21 +138,10 @@ class ApiService {
     return res.data;
   }
 
-  Future<Map<String, dynamic>> sendMessage(String key, String content, {List<File>? files}) async {
-    final multipartFiles = <MultipartFile>[];
-    if (files != null) {
-      for (final f in files) {
-        multipartFiles.add(await MultipartFile.fromFile(f.path, filename: f.path.split('/').last));
-      }
-    }
-    final formData = FormData.fromMap({
+  Future<Map<String, dynamic>> sendMessage(String key, String content) async {
+    final res = await _dio.post('/sessions/$key/messages', data: {
       'content': content,
-      if (multipartFiles.isNotEmpty) 'files': multipartFiles,
     });
-    final res = await _dio.post('/sessions/$key/messages',
-      data: formData,
-      options: Options(contentType: 'multipart/form-data'),
-    );
     return res.data;
   }
 
