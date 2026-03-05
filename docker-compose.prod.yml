@@ -34,6 +34,24 @@ services:
     networks:
       - doohub-net
 
+  backup:
+    container_name: doohub-backup
+    image: alpine:3.19
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - PGHOST=db
+      - PGUSER=doohub
+      - PGPASSWORD=${POSTGRES_PASSWORD:-doohub}
+      - PGDATABASE=doohub
+      - GH_TOKEN=${GH_TOKEN}
+    volumes:
+      - ./backend/scripts/setup-cron.sh:/setup-cron.sh:ro
+      - ./backend/scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/setup-cron.sh"]
+    restart: unless-stopped
+
   db:
     container_name: doohub-db
     image: postgres:16-alpine
