@@ -12,6 +12,10 @@ services:
       slave:
         condition: service_started
     env_file: .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/firebase-service-account.json
+    volumes:
+      - /opt/secrets/firebase-service-account.json:/secrets/firebase-service-account.json:ro
     restart: unless-stopped
     networks:
       - default
