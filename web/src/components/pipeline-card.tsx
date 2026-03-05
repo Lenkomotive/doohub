@@ -23,6 +23,7 @@ const statusVariant: Record<string, "default" | "secondary" | "destructive" | "o
 export function PipelineCard({
   pipeline,
   mergeStatus,
+  onClick,
   onCancel,
   onDelete,
   onCheckMergeStatus,
@@ -30,6 +31,7 @@ export function PipelineCard({
 }: {
   pipeline: Pipeline;
   mergeStatus?: MergeStatus;
+  onClick?: () => void;
   onCancel: () => void;
   onDelete: () => void;
   onCheckMergeStatus: () => void;
@@ -50,7 +52,7 @@ export function PipelineCard({
   const prConflictsUrl = pipeline.pr_url ? `${pipeline.pr_url}/conflicts` : null;
 
   return (
-    <Card className="border-border/50 bg-card/50 transition-colors hover:bg-accent/50">
+    <Card className="border-border/50 bg-card/50 transition-colors hover:bg-accent/50 cursor-pointer" onClick={onClick}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex-1 min-w-0 pr-2">
           <h3 className="text-sm font-medium truncate">{title}</h3>

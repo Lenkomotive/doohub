@@ -1,0 +1,310 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  ExternalLink,
+  GitBranch,
+  GitMerge,
+  Loader2,
+  Trash2,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { AppShell } from "@/components/app-shell";
+import { usePipelinesStore, isActive } from "@/store/pipelines";
+import type { Pipeline } from "@/store/pipelines";
+
+const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  planning: "default",
+  planned: "default",
+  developing: "default",
+  developed: "default",
+  reviewing: "default",
+  done: "outline",
+  merged: "secondary",
+  failed: "destructive",
+  cancelled: "secondary",
+};
+
+function PipelineDetail() {
+  const params = useParams();
+  const router = useRouter();
+  const pipelineKey = params.key as string;
+  const [planExpanded, setPlanExpanded] = useState(false);
+
+  const {
+    pipelines,
+    mergeStatuses,
+    fetchPipelines,
+    cancelPipeline,
+    deletePipeline,
+    checkMergeStatus,
+    mergePipeline,
+    connectSSE,
+    disconnectSSE,
+  } = usePipelinesStore();
+
+  useEffect(() => {
+    fetchPipelines();
+    connectSSE();
+    return () => disconnectSSE();
+  }, [fetchPipelines, connectSSE, disconnectSSE]);
+
+  const pipeline = pipelines.find((p) => p.pipeline_key === pipelineKey);
+  const mergeStatus = mergeStatuses[pipelineKey];
+
+  const handleCheckMergeStatus = useCallback(() => {
+    checkMergeStatus(pipelineKey);
+  }, [checkMergeStatus, pipelineKey]);
+
+  useEffect(() => {
+    if (pipeline?.status === "done" && pipeline.pr_number && !mergeStatus) {
+      handleCheckMergeStatus();
+    }
+  }, [pipeline?.status, pipeline?.pr_number, mergeStatus, handleCheckMergeStatus]);
+
+  const handleCancel = async () => {
+    await cancelPipeline(pipelineKey);
+  };
+
+  const handleDelete = async () => {
+    await deletePipeline(pipelineKey);
+    router.push("/pipelines");
+  };
+
+  const handleMerge = async () => {
+    await mergePipeline(pipelineKey);
+  };
+
+  if (pipelines.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!pipeline) {
+    return (
+      <div className="p-6">
+        <Button variant="ghost" size="sm" onClick={() => router.push("/pipelines")}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to pipelines
+        </Button>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-sm text-muted-foreground">Pipeline not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  const title =
+    pipeline.issue_title ||
+    pipeline.task_description ||
+    `Pipeline ${pipeline.pipeline_key}`;
+  const repoName = pipeline.repo_path.split("/").pop() || pipeline.repo_path;
+  const prConflictsUrl = pipeline.pr_url ? `${pipeline.pr_url}/conflicts` : null;
+
+  return (
+    <div className="p-6 max-w-3xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={() => router.push("/pipelines")}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-medium truncate">{title}</h1>
+              <Badge variant={statusVariant[pipeline.status] || "secondary"}>
+                {pipeline.status}
+              </Badge>
+            </div>
+            {pipeline.issue_number && (
+              <span className="text-sm text-muted-foreground">#{pipeline.issue_number}</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {pipeline.pr_url && (
+            <a href={pipeline.pr_url} target="_blank" rel="noopener noreferrer">
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+            </a>
+          )}
+          {isActive(pipeline.status) && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCancel}>
+              <XCircle className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive"
+            onClick={handleDelete}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Info */}
+      <Card className="mb-4 border-border/50 bg-card/50">
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="text-muted-foreground">Repository</span>
+              <p className="font-medium">{repoName}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Model</span>
+              <p className="font-medium">{pipeline.model}</p>
+            </div>
+            {pipeline.branch && (
+              <div>
+                <span className="text-muted-foreground">Branch</span>
+                <p className="font-medium flex items-center gap-1">
+                  <GitBranch className="h-3.5 w-3.5" />
+                  {pipeline.branch}
+                </p>
+              </div>
+            )}
+            {pipeline.total_cost_usd > 0 && (
+              <div>
+                <span className="text-muted-foreground">Cost</span>
+                <p className="font-medium">${pipeline.total_cost_usd.toFixed(2)}</p>
+              </div>
+            )}
+            <div>
+              <span className="text-muted-foreground">Review round</span>
+              <p className="font-medium">{pipeline.review_round}</p>
+            </div>
+            {pipeline.pr_number && (
+              <div>
+                <span className="text-muted-foreground">PR</span>
+                <p className="font-medium">
+                  {pipeline.pr_url ? (
+                    <a
+                      href={pipeline.pr_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      #{pipeline.pr_number}
+                    </a>
+                  ) : (
+                    `#${pipeline.pr_number}`
+                  )}
+                </p>
+              </div>
+            )}
+            <div>
+              <span className="text-muted-foreground">Created</span>
+              <p className="font-medium">{new Date(pipeline.created_at).toLocaleString()}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Updated</span>
+              <p className="font-medium">{new Date(pipeline.updated_at).toLocaleString()}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Error */}
+      {pipeline.error && (
+        <Card className="mb-4 border-destructive/50 bg-destructive/5">
+          <CardContent className="pt-4">
+            <p className="text-sm text-destructive">{pipeline.error}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Merge controls */}
+      {pipeline.status === "done" && mergeStatus && (
+        <Card className="mb-4 border-border/50 bg-card/50">
+          <CardContent className="pt-4 flex items-center gap-3">
+            {mergeStatus.checking && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Checking merge status...
+              </div>
+            )}
+            {!mergeStatus.checking && mergeStatus.already_merged && (
+              <span className="text-sm text-muted-foreground">Already merged</span>
+            )}
+            {!mergeStatus.checking && mergeStatus.has_conflicts && prConflictsUrl && (
+              <a href={prConflictsUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="border-orange-500 text-orange-500 hover:bg-orange-500/10">
+                  Resolve Conflicts
+                </Button>
+              </a>
+            )}
+            {!mergeStatus.checking && mergeStatus.mergeable && !mergeStatus.has_conflicts && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-green-500 text-green-500 hover:bg-green-500/10"
+                disabled={mergeStatus.merging}
+                onClick={handleMerge}
+              >
+                {mergeStatus.merging ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <GitMerge className="h-4 w-4 mr-2" />
+                )}
+                Merge PR
+              </Button>
+            )}
+            {!mergeStatus.checking && mergeStatus.error && (
+              <span className="text-sm text-destructive">{mergeStatus.error}</span>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Plan */}
+      {pipeline.plan && (
+        <Card className="mb-4 border-border/50 bg-card/50">
+          <CardHeader
+            className="flex flex-row items-center gap-2 cursor-pointer select-none pb-2"
+            onClick={() => setPlanExpanded(!planExpanded)}
+          >
+            {planExpanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+            <h3 className="text-sm font-medium">Plan</h3>
+          </CardHeader>
+          {planExpanded && (
+            <CardContent>
+              <pre className="text-sm whitespace-pre-wrap font-mono bg-muted/50 rounded-md p-3 max-h-96 overflow-y-auto">
+                {pipeline.plan}
+              </pre>
+            </CardContent>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+export default function PipelineDetailPage() {
+  return (
+    <AppShell>
+      <PipelineDetail />
+    </AppShell>
+  );
+}
