@@ -32,6 +32,7 @@ async def create_pipeline(
         pipeline_key=pipeline_key,
         repo_path=body.repo_path,
         issue_number=body.issue_number,
+        issue_title=body.task_description,
         task_description=body.task_description,
         model=body.model,
     )
@@ -172,6 +173,8 @@ async def pipeline_callback(
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
     pipeline.status = body.status
+    if body.issue_title is not None:
+        pipeline.issue_title = body.issue_title
     if body.plan is not None:
         pipeline.plan = body.plan
     if body.branch is not None:

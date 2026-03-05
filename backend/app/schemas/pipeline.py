@@ -11,6 +11,7 @@ class CreatePipelineRequest(BaseModel):
 class PipelineCallbackRequest(BaseModel):
     pipeline_key: str
     status: str
+    issue_title: str | None = None
     plan: str | None = None
     branch: str | None = None
     pr_number: int | None = None
