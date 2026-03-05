@@ -87,7 +87,7 @@ class Pipeline {
   }
 
   String get displayTitle =>
-      taskDescription ?? issueTitle ?? 'Pipeline $pipelineKey';
+      issueTitle ?? taskDescription ?? 'Pipeline $pipelineKey';
 
   bool get isActive => const {
         'planning', 'planned', 'developing', 'developed', 'reviewing',
