@@ -30,16 +30,6 @@ services:
     networks:
       - doohub-net
 
-  adminer:
-    container_name: doohub-adminer
-    image: adminer:latest
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-
   db:
     container_name: doohub-db
     image: postgres:16-alpine
