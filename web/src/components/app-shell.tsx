@@ -7,9 +7,9 @@ import { PageTransition } from "@/components/page-transition";
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
-      <div className="flex h-[100dvh] bg-background pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      <div className="flex h-[100dvh] bg-background">
         <Sidebar />
-        <main className="flex-1 overflow-auto pb-14 md:pb-0">
+        <main className="flex-1 overflow-auto">
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
