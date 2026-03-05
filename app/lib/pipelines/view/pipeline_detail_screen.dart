@@ -4,24 +4,45 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/pipeline.dart';
 import '../bloc/pipelines_cubit.dart';
-import '../bloc/pipelines_state.dart';
+import '../bloc/pipelines_state.dart' show MergeStatus, PipelinesState;
 
-class PipelineDetailScreen extends StatelessWidget {
+class PipelineDetailScreen extends StatefulWidget {
   final String pipelineKey;
 
   const PipelineDetailScreen({super.key, required this.pipelineKey});
 
   @override
+  State<PipelineDetailScreen> createState() => _PipelineDetailScreenState();
+}
+
+class _PipelineDetailScreenState extends State<PipelineDetailScreen> {
+  bool _mergeChecked = false;
+
+  @override
   Widget build(BuildContext context) {
     return BlocBuilder<PipelinesCubit, PipelinesState>(
       builder: (context, state) {
-        final pipeline = state.byKey(pipelineKey);
+        final pipeline = state.byKey(widget.pipelineKey);
         if (pipeline == null) {
           return Scaffold(
             appBar: AppBar(),
             body: const Center(child: Text('Pipeline not found')),
           );
         }
+
+        // Auto-check merge status when pipeline is done and has a PR
+        if (pipeline.status == 'done' &&
+            pipeline.prUrl != null &&
+            !_mergeChecked &&
+            !state.mergeStatuses.containsKey(widget.pipelineKey)) {
+          _mergeChecked = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            context.read<PipelinesCubit>().checkMergeStatus(widget.pipelineKey);
+          });
+        }
+
+        final mergeStatus = state.mergeStatuses[widget.pipelineKey];
+        final isMerging = state.mergingKeys.contains(widget.pipelineKey);
 
         return Scaffold(
           appBar: AppBar(
@@ -36,7 +57,7 @@ class PipelineDetailScreen extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.cancel_outlined),
                   onPressed: () {
-                    context.read<PipelinesCubit>().cancelPipeline(pipelineKey);
+                    context.read<PipelinesCubit>().cancelPipeline(widget.pipelineKey);
                   },
                 ),
             ],
@@ -54,6 +75,15 @@ class PipelineDetailScreen extends StatelessWidget {
               if (pipeline.prUrl != null) ...[
                 const SizedBox(height: 12),
                 _PrCard(prUrl: pipeline.prUrl!, prNumber: pipeline.prNumber),
+              ],
+              if (pipeline.status == 'done' && pipeline.prUrl != null) ...[
+                const SizedBox(height: 12),
+                _MergeCard(
+                  pipelineKey: widget.pipelineKey,
+                  mergeStatus: mergeStatus,
+                  isMerging: isMerging,
+                  prUrl: pipeline.prUrl!,
+                ),
               ],
               if (pipeline.error != null) ...[
                 const SizedBox(height: 12),
@@ -247,6 +277,111 @@ class _PrCard extends StatelessWidget {
   }
 }
 
+class _MergeCard extends StatelessWidget {
+  final String pipelineKey;
+  final MergeStatus? mergeStatus;
+  final bool isMerging;
+  final String prUrl;
+
+  const _MergeCard({
+    required this.pipelineKey,
+    required this.mergeStatus,
+    required this.isMerging,
+    required this.prUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (mergeStatus == null) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            children: [
+              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+              SizedBox(width: 12),
+              Text('Checking merge status...', style: TextStyle(fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (mergeStatus!.error != null) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.error_outline, color: Colors.red),
+          title: Text(mergeStatus!.error!, style: const TextStyle(fontSize: 13, color: Colors.red)),
+          trailing: TextButton(
+            onPressed: () => context.read<PipelinesCubit>().checkMergeStatus(pipelineKey),
+            child: const Text('Retry'),
+          ),
+        ),
+      );
+    }
+
+    if (mergeStatus!.alreadyMerged) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.check_circle, color: Colors.green),
+          title: const Text('Already merged', style: TextStyle(fontWeight: FontWeight.w500)),
+        ),
+      );
+    }
+
+    if (mergeStatus!.closed) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.cancel, color: Colors.grey),
+          title: const Text('PR is closed', style: TextStyle(fontWeight: FontWeight.w500)),
+        ),
+      );
+    }
+
+    if (mergeStatus!.hasConflicts) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+                icon: const Icon(Icons.warning_amber_rounded),
+                label: const Text('Resolve Conflicts'),
+                onPressed: () => launchUrl(Uri.parse('$prUrl/conflicts')),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  context.read<PipelinesCubit>().checkMergeStatus(pipelineKey);
+                },
+                child: const Text('Re-check status'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(backgroundColor: Colors.green),
+          icon: isMerging
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.merge),
+          label: Text(isMerging ? 'Merging...' : 'Merge'),
+          onPressed: isMerging
+              ? null
+              : () => context.read<PipelinesCubit>().mergePipeline(pipelineKey),
+        ),
+      ),
+    );
+  }
+}
+
 class _ErrorCard extends StatelessWidget {
   final String error;
 
@@ -281,7 +416,7 @@ class _ErrorCard extends StatelessWidget {
     'planning' || 'planned' => (Colors.blue, status),
     'developing' || 'developed' => (Colors.orange, status),
     'reviewing' => (Colors.purple, status),
-    'done' => (Colors.green, status),
+    'done' || 'merged' => (Colors.green, status),
     'failed' => (Colors.red, status),
     'cancelled' => (Colors.grey, status),
     _ => (Colors.grey, status),
