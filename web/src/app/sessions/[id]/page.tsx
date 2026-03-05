@@ -28,6 +28,18 @@ interface Attachment {
   url: string;
 }
 
+async function downloadAttachment(att: Attachment) {
+  const res = await apiFetch(att.url);
+  if (!res.ok) return;
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = att.filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface Message {
   id: number;
   role: "user" | "assistant";
@@ -61,9 +73,11 @@ function ChatView() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
 
   const fetchSession = async () => {
     const res = await apiFetch(`/sessions/${sessionKey}`);
@@ -100,28 +114,28 @@ function ChatView() {
     const filesToSend = [...pendingFiles];
     setPendingFiles([]);
 
+    const optimisticAttachments: Attachment[] = filesToSend.map((f, i) => ({
+      id: -(i + 1),
+      filename: f.name,
+      mime_type: f.type || "application/octet-stream",
+      file_size: f.size,
+      url: "",
+    }));
     const optimisticMsg: Message = {
       id: Date.now(),
       role: "user",
       content: message,
       created_at: new Date().toISOString(),
+      attachments: optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
     };
     setMessages((prev) => [...prev, optimisticMsg]);
 
-    let res: Response;
-    if (filesToSend.length > 0) {
-      const formData = new FormData();
-      formData.append("content", message);
-      for (const file of filesToSend) {
-        formData.append("files", file);
-      }
-      res = await apiUpload(`/sessions/${sessionKey}/messages`, formData);
-    } else {
-      res = await apiFetch(`/sessions/${sessionKey}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content: message }),
-      });
+    const formData = new FormData();
+    formData.append("content", message);
+    for (const file of filesToSend) {
+      formData.append("files", file);
     }
+    const res = await apiUpload(`/sessions/${sessionKey}/messages`, formData);
 
     if (res.ok) {
       const data = await res.json();
@@ -166,6 +180,32 @@ function ChatView() {
     e.target.value = "";
   };
 
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current++;
+    if (e.dataTransfer.types.includes("Files")) setDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current === 0) setDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      setPendingFiles((prev) => [...prev, ...files].slice(0, 5));
+    }
+  };
+
   const removePendingFile = (index: number) => {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   };
@@ -179,7 +219,18 @@ function ChatView() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div
+      className="relative flex h-screen flex-col bg-background"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {dragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 border-2 border-dashed border-primary rounded-lg">
+          <p className="text-sm font-medium text-primary">Drop files to attach</p>
+        </div>
+      )}
       {/* Header */}
       <header className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
         <div className="flex items-center gap-2">
@@ -251,17 +302,15 @@ function ChatView() {
                 {msg.attachments && msg.attachments.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {msg.attachments.map((att) => (
-                      <a
+                      <button
                         key={att.id}
-                        href={att.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-lg bg-background/20 px-2 py-1 text-xs hover:bg-background/30"
+                        onClick={() => att.url && downloadAttachment(att)}
+                        className="flex items-center gap-2 rounded-lg bg-background/20 px-2 py-1 text-xs hover:bg-background/30 cursor-pointer"
                       >
                         <Download className="h-3 w-3" />
                         <span className="truncate">{att.filename}</span>
                         <span className="text-[10px] opacity-70">{formatFileSize(att.file_size)}</span>
-                      </a>
+                      </button>
                     ))}
                   </div>
                 )}

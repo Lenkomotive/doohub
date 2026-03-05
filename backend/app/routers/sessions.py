@@ -1,19 +1,24 @@
 import asyncio
 import json
+import os
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session as DBSession
+from fastapi.responses import FileResponse, StreamingResponse
+from sqlalchemy.orm import Session as DBSession, subqueryload
 
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.core.fcm import send_push
 from app.core.session_events import session_events as session_event_bus
 from app.core.slave_client import slave
-from app.models.session import Session, SessionMessage
+from app.models.session import MessageAttachment, Session, SessionMessage
 from app.models.user import User
 from app.schemas.session import CreateSessionRequest
+
+UPLOAD_DIR = Path(os.environ.get("DOOHUB_UPLOAD_DIR", "./uploads"))
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 router = APIRouter(tags=["sessions"])
 
@@ -196,16 +201,39 @@ async def send_message(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    db.add(SessionMessage(session_id=session.id, role="user", content=content))
-    db.commit()
+    user_msg = SessionMessage(session_id=session.id, role="user", content=content)
+    db.add(user_msg)
+    db.flush()
 
-    # Read uploaded files into memory for forwarding to slave
+    # Read uploaded files into memory for forwarding to slave, and persist to disk
     file_tuples = None
+    saved_attachments = []
     if files:
         file_tuples = []
         for f in files:
             data = await f.read()
+            if len(data) > MAX_FILE_SIZE:
+                raise HTTPException(status_code=413, detail=f"File '{f.filename}' exceeds 10 MB limit")
             file_tuples.append((f.filename or "file", data, f.content_type or "application/octet-stream"))
+
+            # Save to disk
+            file_dir = UPLOAD_DIR / session_key / str(user_msg.id)
+            file_dir.mkdir(parents=True, exist_ok=True)
+            filename = f.filename or "file"
+            file_path = file_dir / filename
+            file_path.write_bytes(data)
+
+            att = MessageAttachment(
+                message_id=user_msg.id,
+                filename=filename,
+                mime_type=f.content_type or "application/octet-stream",
+                file_size=len(data),
+                storage_path=str(file_path),
+            )
+            db.add(att)
+            saved_attachments.append(att)
+
+    db.commit()
 
     result = await slave.run(
         session_key=session_key,
@@ -233,6 +261,15 @@ async def send_message(
         "content": response_text,
         "session_id": new_claude_sid,
         "cost_usd": result.get("cost_usd"),
+        "user_attachments": [
+            {
+                "id": a.id,
+                "filename": a.filename,
+                "mime_type": a.mime_type,
+                "file_size": a.file_size,
+            }
+            for a in saved_attachments
+        ],
     }
 
 
@@ -248,6 +285,42 @@ async def cancel_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return await slave.cancel(session_key)
+
+
+@router.get("/sessions/{session_key}/attachments/{attachment_id}")
+async def download_attachment(
+    session_key: str,
+    attachment_id: int,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session = db.query(Session).filter(
+        Session.session_key == session_key, Session.user_id == user.id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    att = (
+        db.query(MessageAttachment)
+        .join(SessionMessage)
+        .filter(
+            MessageAttachment.id == attachment_id,
+            SessionMessage.session_id == session.id,
+        )
+        .first()
+    )
+    if not att:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    file_path = Path(att.storage_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=att.filename,
+        media_type=att.mime_type,
+    )
 
 
 @router.get("/sessions/{session_key}/history")
@@ -267,6 +340,7 @@ def get_message_history(
     total = len(session.messages)
     messages = (
         db.query(SessionMessage)
+        .options(subqueryload(SessionMessage.attachments))
         .filter(SessionMessage.session_id == session.id)
         .order_by(SessionMessage.created_at)
         .offset(offset)
@@ -275,7 +349,22 @@ def get_message_history(
     )
     return {
         "messages": [
-            {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at.isoformat()}
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "created_at": m.created_at.isoformat(),
+                "attachments": [
+                    {
+                        "id": a.id,
+                        "filename": a.filename,
+                        "mime_type": a.mime_type,
+                        "file_size": a.file_size,
+                        "url": f"/sessions/{session_key}/attachments/{a.id}",
+                    }
+                    for a in m.attachments
+                ],
+            }
             for m in messages
         ],
         "total": total,

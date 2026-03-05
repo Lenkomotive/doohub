@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -38,3 +38,24 @@ class SessionMessage(Base):
     )
 
     session: Mapped["Session"] = relationship(back_populates="messages")
+    attachments: Mapped[list["MessageAttachment"]] = relationship(
+        back_populates="message", cascade="all, delete-orphan"
+    )
+
+
+class MessageAttachment(Base):
+    __tablename__ = "message_attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    message_id: Mapped[int] = mapped_column(
+        ForeignKey("session_messages.id", ondelete="CASCADE"), nullable=False
+    )
+    filename: Mapped[str] = mapped_column(String(255))
+    mime_type: Mapped[str] = mapped_column(String(100))
+    file_size: Mapped[int] = mapped_column(BigInteger)
+    storage_path: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    message: Mapped["SessionMessage"] = relationship(back_populates="attachments")

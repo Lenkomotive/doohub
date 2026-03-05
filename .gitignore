@@ -17,6 +17,9 @@ build/
 .flutter-plugins-dependencies
 .metadata
 
+# Uploads
+backend/uploads/
+
 # Environment
 .env
 
