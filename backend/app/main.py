@@ -19,6 +19,7 @@ if os.environ.get("DOOHUB_CORS_ORIGIN"):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=r"https://doohub.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
