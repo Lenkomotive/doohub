@@ -120,30 +120,56 @@ class PipelinesCubit extends Cubit<PipelinesState> {
       final data = await api.checkMergeStatus(key);
       if (isClosed) return;
       final ms = MergeStatus.fromJson(data);
+      final pipelines = ms.alreadyMerged
+          ? state.pipelines.map((p) {
+              if (p.pipelineKey == key) return p.copyWith(status: 'merged');
+              return p;
+            }).toList()
+          : null;
       emit(state.copyWith(
         mergeStatuses: {...state.mergeStatuses, key: ms},
+        pipelines: pipelines,
       ));
-      if (ms.alreadyMerged) {
-        final updated = state.pipelines.map((p) {
-          if (p.pipelineKey == key) return p.copyWith(status: 'merged');
-          return p;
-        }).toList();
-        emit(state.copyWith(pipelines: updated));
-      }
-    } catch (_) {}
+    } catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(
+        mergeStatuses: {
+          ...state.mergeStatuses,
+          key: MergeStatus(mergeable: false, hasConflicts: false, error: 'Failed to check merge status'),
+        },
+      ));
+    }
   }
 
   Future<void> mergePipeline(String key) async {
     emit(state.copyWith(mergingKeys: {...state.mergingKeys, key}));
     try {
-      await api.mergePipeline(key);
+      final result = await api.mergePipeline(key);
       if (isClosed) return;
-      final updated = state.pipelines.map((p) {
-        if (p.pipelineKey == key) return p.copyWith(status: 'merged');
-        return p;
-      }).toList();
-      emit(state.copyWith(pipelines: updated));
-    } catch (_) {}
+      if (result['success'] == true) {
+        final updated = state.pipelines.map((p) {
+          if (p.pipelineKey == key) return p.copyWith(status: 'merged');
+          return p;
+        }).toList();
+        emit(state.copyWith(pipelines: updated));
+      } else {
+        emit(state.copyWith(
+          mergeStatuses: {
+            ...state.mergeStatuses,
+            key: MergeStatus(mergeable: false, hasConflicts: false, error: result['error'] ?? 'Merge failed'),
+          },
+        ));
+      }
+    } catch (e) {
+      if (!isClosed) {
+        emit(state.copyWith(
+          mergeStatuses: {
+            ...state.mergeStatuses,
+            key: MergeStatus(mergeable: false, hasConflicts: false, error: 'Merge request failed'),
+          },
+        ));
+      }
+    }
     if (!isClosed) {
       final next = Set<String>.from(state.mergingKeys)..remove(key);
       emit(state.copyWith(mergingKeys: next));

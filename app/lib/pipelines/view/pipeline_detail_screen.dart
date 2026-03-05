@@ -307,11 +307,33 @@ class _MergeCard extends StatelessWidget {
       );
     }
 
+    if (mergeStatus!.error != null) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.error_outline, color: Colors.red),
+          title: Text(mergeStatus!.error!, style: const TextStyle(fontSize: 13, color: Colors.red)),
+          trailing: TextButton(
+            onPressed: () => context.read<PipelinesCubit>().checkMergeStatus(pipelineKey),
+            child: const Text('Retry'),
+          ),
+        ),
+      );
+    }
+
     if (mergeStatus!.alreadyMerged) {
       return Card(
         child: ListTile(
           leading: const Icon(Icons.check_circle, color: Colors.green),
           title: const Text('Already merged', style: TextStyle(fontWeight: FontWeight.w500)),
+        ),
+      );
+    }
+
+    if (mergeStatus!.closed) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.cancel, color: Colors.grey),
+          title: const Text('PR is closed', style: TextStyle(fontWeight: FontWeight.w500)),
         ),
       );
     }
@@ -394,7 +416,7 @@ class _ErrorCard extends StatelessWidget {
     'planning' || 'planned' => (Colors.blue, status),
     'developing' || 'developed' => (Colors.orange, status),
     'reviewing' => (Colors.purple, status),
-    'done' => (Colors.green, status),
+    'done' || 'merged' => (Colors.green, status),
     'failed' => (Colors.red, status),
     'cancelled' => (Colors.grey, status),
     _ => (Colors.grey, status),
