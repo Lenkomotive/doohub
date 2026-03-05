@@ -1,6 +1,12 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'api.dart';
 
+Future<void> unregisterFcmToken() async {
+  try {
+    await FirebaseMessaging.instance.deleteToken();
+  } catch (_) {}
+}
+
 Future<void> registerFcmToken(ApiService api) async {
   try {
     final messaging = FirebaseMessaging.instance;

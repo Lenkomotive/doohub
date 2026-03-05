@@ -17,7 +17,7 @@ class RefreshRequest(BaseModel):
 
 
 class FcmTokenRequest(BaseModel):
-    token: str
+    token: str | None = None
 
 
 class NotificationSettingsRequest(BaseModel):

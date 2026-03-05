@@ -51,6 +51,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     await api.logout();
+    await unregisterFcmToken();
     emit(AuthUnauthenticated());
   }
 }
