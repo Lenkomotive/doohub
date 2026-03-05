@@ -175,12 +175,11 @@ class SlaveClient:
             "pr_number": pr_number,
         })
 
-    async def list_issues(self, repo_path: str, page: int = 1, per_page: int = 10) -> Any:
-        return await self._request("GET", "/api/repos/issues", params={
-            "repo_path": repo_path,
-            "page": page,
-            "per_page": per_page,
-        })
+    async def list_issues(self, repo_path: str, per_page: int = 30, cursor: str | None = None) -> Any:
+        params: dict = {"repo_path": repo_path, "per_page": per_page}
+        if cursor:
+            params["cursor"] = cursor
+        return await self._request("GET", "/api/repos/issues", params=params)
 
     async def fetch_issue(self, repo_path: str, issue_number: int) -> Any:
         return await self._request("GET", "/api/repos/issue", params={

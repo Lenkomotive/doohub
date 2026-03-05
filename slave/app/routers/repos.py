@@ -1,5 +1,6 @@
 import asyncio
 import json
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -7,6 +8,35 @@ from app.auth import require_api_key
 from app.config import settings
 
 router = APIRouter(prefix="/api/repos", dependencies=[Depends(require_api_key)])
+
+_ISSUES_QUERY = """
+query($owner: String!, $name: String!, $first: Int!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    issues(first: $first, after: $after, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number
+        title
+        labels(first: 10) { nodes { name } }
+      }
+    }
+  }
+}
+"""
+
+
+async def _get_repo_nwo(repo_path: str) -> str:
+    """Get owner/name for a repo using gh."""
+    proc = await asyncio.create_subprocess_exec(
+        "gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner",
+        cwd=repo_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+    if proc.returncode != 0:
+        raise HTTPException(status_code=502, detail="Failed to determine repo owner/name")
+    return stdout.decode().strip()
 
 
 @router.get("")
@@ -26,17 +56,25 @@ async def list_repos():
 @router.get("/issues")
 async def list_issues(
     repo_path: str = Query(...),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(10, ge=1, le=100),
+    per_page: int = Query(30, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
 ):
-    """List open GitHub issues for a repository via the gh CLI."""
-    # Fetch one extra to detect if there are more pages
-    fetch_limit = page * per_page + 1
+    """List open GitHub issues with cursor-based pagination via GraphQL."""
+    nwo = await _get_repo_nwo(repo_path)
+    owner, name = nwo.split("/", 1)
+
+    cmd = [
+        "gh", "api", "graphql",
+        "-F", f"query={_ISSUES_QUERY}",
+        "-F", f"owner={owner}",
+        "-F", f"name={name}",
+        "-F", f"first={per_page}",
+    ]
+    if cursor:
+        cmd += ["-F", f"after={cursor}"]
+
     proc = await asyncio.create_subprocess_exec(
-        "gh", "issue", "list",
-        "--state", "open",
-        "--limit", str(fetch_limit),
-        "--json", "number,title,labels,state",
+        *cmd,
         cwd=repo_path,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -45,13 +83,28 @@ async def list_issues(
     if proc.returncode != 0:
         raise HTTPException(
             status_code=502,
-            detail=f"gh issue list failed: {stderr.decode().strip()}",
+            detail=f"GraphQL query failed: {stderr.decode().strip()}",
         )
-    all_issues = json.loads(stdout.decode())
-    start = (page - 1) * per_page
-    page_issues = all_issues[start : start + per_page]
-    has_more = len(all_issues) > start + per_page
-    return {"issues": page_issues, "has_more": has_more, "page": page}
+
+    data = json.loads(stdout.decode())
+    repo_data = data.get("data", {}).get("repository", {}).get("issues", {})
+    page_info = repo_data.get("pageInfo", {})
+    nodes = repo_data.get("nodes", [])
+
+    issues = [
+        {
+            "number": n["number"],
+            "title": n["title"],
+            "labels": [{"name": l["name"]} for l in n.get("labels", {}).get("nodes", [])],
+        }
+        for n in nodes
+    ]
+
+    return {
+        "issues": issues,
+        "has_more": page_info.get("hasNextPage", False),
+        "end_cursor": page_info.get("endCursor"),
+    }
 
 
 @router.get("/issue")

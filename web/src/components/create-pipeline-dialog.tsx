@@ -42,7 +42,7 @@ export function CreatePipelineDialog() {
   const [open, setOpen] = useState(false);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
-  const [issuesPage, setIssuesPage] = useState(1);
+  const [issuesCursor, setIssuesCursor] = useState<string | null>(null);
   const [hasMoreIssues, setHasMoreIssues] = useState(false);
   const [model, setModel] = useState("sonnet");
   const [repoPath, setRepoPath] = useState("");
@@ -71,18 +71,20 @@ export function CreatePipelineDialog() {
     }
   }, [open]);
 
-  const loadIssues = async (repo: string, page: number) => {
-    const res = await apiFetch(`/repos/issues?repo_path=${encodeURIComponent(repo)}&page=${page}&per_page=20`);
+  const loadIssues = async (repo: string, cursor?: string | null) => {
+    let url = `/repos/issues?repo_path=${encodeURIComponent(repo)}&per_page=30`;
+    if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`;
+    const res = await apiFetch(url);
     if (res.ok) {
       const data = await res.json();
       const newIssues = data.issues || [];
-      if (page === 1) {
+      if (!cursor) {
         setIssues(newIssues);
       } else {
         setIssues((prev) => [...prev, ...newIssues]);
       }
-      setHasMoreIssues(newIssues.length === 20);
-      setIssuesPage(page);
+      setHasMoreIssues(data.has_more ?? false);
+      setIssuesCursor(data.end_cursor ?? null);
     }
   };
 
@@ -90,8 +92,9 @@ export function CreatePipelineDialog() {
     setRepoPath(path);
     setSelectedIssues([]);
     setIssues([]);
+    setIssuesCursor(null);
     if (path) {
-      loadIssues(path, 1);
+      loadIssues(path);
     }
   };
 
@@ -200,7 +203,7 @@ export function CreatePipelineDialog() {
                 {hasMoreIssues && (
                   <button
                     className="w-full px-3 py-2 text-xs text-muted-foreground hover:bg-accent/50"
-                    onClick={() => loadIssues(repoPath, issuesPage + 1)}
+                    onClick={() => loadIssues(repoPath, issuesCursor)}
                   >
                     Load more...
                   </button>

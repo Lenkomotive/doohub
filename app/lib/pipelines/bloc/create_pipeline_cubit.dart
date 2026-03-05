@@ -27,30 +27,31 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
   }
 
   Future<void> loadIssues(String repoPath) async {
-    emit(state.copyWith(loadingIssues: true, issues: [], selectedIssueNumbers: {}, issuesPage: 1, hasMoreIssues: false));
+    emit(state.copyWith(loadingIssues: true, issues: [], selectedIssueNumbers: {}, clearCursor: true, hasMoreIssues: false));
     try {
-      final data = await api.getIssues(repoPath, page: 1, perPage: 30);
+      final data = await api.getIssues(repoPath);
       final issues = (data['issues'] as List).cast<Map<String, dynamic>>();
       final hasMore = data['has_more'] as bool? ?? false;
-      if (!isClosed) emit(state.copyWith(issues: issues, loadingIssues: false, issuesPage: 1, hasMoreIssues: hasMore));
+      final endCursor = data['end_cursor'] as String?;
+      if (!isClosed) emit(state.copyWith(issues: issues, loadingIssues: false, issuesCursor: endCursor, hasMoreIssues: hasMore));
     } catch (_) {
       if (!isClosed) emit(state.copyWith(loadingIssues: false));
     }
   }
 
   Future<void> loadMoreIssues() async {
-    if (state.loadingMoreIssues || !state.hasMoreIssues) return;
-    final nextPage = state.issuesPage + 1;
+    if (state.loadingMoreIssues || !state.hasMoreIssues || state.issuesCursor == null) return;
     emit(state.copyWith(loadingMoreIssues: true));
     try {
-      final data = await api.getIssues(state.selectedRepo, page: nextPage, perPage: 20);
+      final data = await api.getIssues(state.selectedRepo, cursor: state.issuesCursor);
       final newIssues = (data['issues'] as List).cast<Map<String, dynamic>>();
       final hasMore = data['has_more'] as bool? ?? false;
+      final endCursor = data['end_cursor'] as String?;
       if (!isClosed) {
         emit(state.copyWith(
           issues: [...state.issues, ...newIssues],
           loadingMoreIssues: false,
-          issuesPage: nextPage,
+          issuesCursor: endCursor,
           hasMoreIssues: hasMore,
         ));
       }
