@@ -28,8 +28,8 @@ export function PipelineCard({
   onDelete: () => void;
 }) {
   const title =
-    pipeline.task_description ||
     pipeline.issue_title ||
+    pipeline.task_description ||
     `Pipeline ${pipeline.pipeline_key}`;
   const repoName = pipeline.repo_path.split("/").pop() || pipeline.repo_path;
 
