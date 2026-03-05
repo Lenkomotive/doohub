@@ -43,12 +43,14 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
     final nextPage = state.issuesPage + 1;
     emit(state.copyWith(loadingMoreIssues: true));
     try {
-      final data = await api.getIssues(state.selectedRepo, page: nextPage, perPage: 20);
+      final data = await api.getIssues(state.selectedRepo, page: nextPage, perPage: 30);
       final newIssues = (data['issues'] as List).cast<Map<String, dynamic>>();
       final hasMore = data['has_more'] as bool? ?? false;
       if (!isClosed) {
+        final existingNumbers = state.issues.map((i) => i['number']).toSet();
+        final deduped = newIssues.where((i) => !existingNumbers.contains(i['number'])).toList();
         emit(state.copyWith(
-          issues: [...state.issues, ...newIssues],
+          issues: [...state.issues, ...deduped],
           loadingMoreIssues: false,
           issuesPage: nextPage,
           hasMoreIssues: hasMore,
