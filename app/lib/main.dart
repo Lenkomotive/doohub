@@ -6,10 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'services/api.dart';
 import 'auth/bloc/auth_bloc.dart';
-import 'auth/bloc/auth_state.dart';
+import 'sessions/bloc/sessions_cubit.dart';
+import 'pipelines/bloc/pipelines_cubit.dart';
 import 'theme/bloc/theme_cubit.dart';
-import 'auth/view/login_screen.dart';
-import 'home/view/home_screen.dart';
+import 'package:go_router/go_router.dart';
+import 'router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,7 +26,7 @@ void main() async {
 Future<void> _initFCM() async {
   try {
     final messaging = FirebaseMessaging.instance;
-    
+
     // Request permissions
     await messaging.requestPermission(
       alert: true,
@@ -36,7 +37,7 @@ Future<void> _initFCM() async {
       provisional: false,
       sound: true,
     );
-    
+
     // On iOS, get APNS token first
     try {
       await messaging.getAPNSToken();
@@ -117,43 +118,55 @@ final _lightTheme = ThemeData(
   ),
 );
 
-class DooHubApp extends StatelessWidget {
+class DooHubApp extends StatefulWidget {
   final SharedPreferences prefs;
 
   const DooHubApp({super.key, required this.prefs});
 
   @override
-  Widget build(BuildContext context) {
-    final api = ApiService();
+  State<DooHubApp> createState() => _DooHubAppState();
+}
 
+class _DooHubAppState extends State<DooHubApp> {
+  late final ApiService _api;
+  late final AuthBloc _authBloc;
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _api = ApiService();
+    _authBloc = AuthBloc(_api);
+    _router = createRouter(_authBloc);
+  }
+
+  @override
+  void dispose() {
+    _router.dispose();
+    _authBloc.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return RepositoryProvider.value(
-      value: api,
+      value: _api,
       child: MultiBlocProvider(
         providers: [
-          BlocProvider(create: (_) => AuthBloc(api)),
-          BlocProvider(create: (_) => ThemeCubit(prefs)),
+          BlocProvider.value(value: _authBloc),
+          BlocProvider(create: (_) => ThemeCubit(widget.prefs)),
+          BlocProvider(create: (_) => SessionsCubit(_api)),
+          BlocProvider(create: (_) => PipelinesCubit(_api)),
         ],
         child: BlocBuilder<ThemeCubit, ThemeMode>(
           builder: (context, themeMode) {
-            return MaterialApp(
+            return MaterialApp.router(
               title: 'DooHub',
               debugShowCheckedModeBanner: false,
               theme: _lightTheme,
               darkTheme: _darkTheme,
               themeMode: themeMode,
-              home: BlocBuilder<AuthBloc, AuthState>(
-                builder: (context, state) {
-                  if (state is AuthLoading || state is AuthInitial) {
-                    return const Scaffold(
-                      body: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  if (state is AuthAuthenticated) {
-                    return const HomeScreen();
-                  }
-                  return const LoginScreen();
-                },
-              ),
+              routerConfig: _router,
             );
           },
         ),

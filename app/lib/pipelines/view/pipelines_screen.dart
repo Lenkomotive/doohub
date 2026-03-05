@@ -1,24 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/pipeline.dart';
 import '../../services/api.dart';
 import '../bloc/create_pipeline_cubit.dart';
 import '../bloc/create_pipeline_state.dart';
 import '../bloc/pipelines_cubit.dart';
 import '../bloc/pipelines_state.dart';
-import 'pipeline_detail_screen.dart';
 
 class PipelinesScreen extends StatelessWidget {
   const PipelinesScreen({super.key});
 
   void _openDetail(BuildContext context, Pipeline pipeline) {
-    final cubit = context.read<PipelinesCubit>();
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => BlocProvider.value(
-        value: cubit,
-        child: PipelineDetailScreen(pipelineKey: pipeline.pipelineKey),
-      ),
-    ));
+    context.push('/pipelines/${pipeline.pipelineKey}');
   }
 
   void _showCreateSheet(BuildContext context) {
