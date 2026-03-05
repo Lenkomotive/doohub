@@ -204,25 +204,6 @@ async def send_message(
     ))
     db.commit()
 
-    # Read uploaded image files from disk to forward to slave
-    file_tuples = None
-    if body.image_urls:
-        file_tuples = []
-        for url in body.image_urls:
-            # URLs are like /uploads/abc123.png — extract filename
-            filename = url.split("/")[-1]
-            filepath = os.path.join(settings.upload_dir, filename)
-            if os.path.isfile(filepath):
-                with open(filepath, "rb") as f:
-                    data = f.read()
-                ext = os.path.splitext(filename)[1].lower()
-                mime = {
-                    ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                    ".png": "image/png", ".gif": "image/gif",
-                    ".webp": "image/webp",
-                }.get(ext, "application/octet-stream")
-                file_tuples.append((filename, data, mime))
-
     result = await slave.run(
         session_key=session_key,
         message=body.content,
@@ -230,7 +211,7 @@ async def send_message(
         model=session.model,
         claude_session_id=session.claude_session_id,
         interactive=session.interactive,
-        files=file_tuples if file_tuples else None,
+        image_urls=body.image_urls or None,
     )
 
     response_text = (result.get("result") or result.get("error") or "").strip()

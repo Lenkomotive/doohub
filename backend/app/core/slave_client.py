@@ -92,29 +92,9 @@ class SlaveClient:
         claude_session_id: str | None,
         interactive: bool = False,
         timeout: int = 300,
-        files: list[tuple[str, bytes, str]] | None = None,
+        image_urls: list[str] | None = None,
     ) -> Any:
-        if files:
-            multipart_files = [
-                ("files", (fname, data, ctype)) for fname, data, ctype in files
-            ]
-            form_data = {
-                "session_key": session_key,
-                "message": message,
-                "project_path": project_path,
-                "model": model,
-                "interactive": str(interactive).lower(),
-                "timeout": str(timeout),
-            }
-            if claude_session_id:
-                form_data["claude_session_id"] = claude_session_id
-            return await self._request(
-                "POST",
-                "/api/run/files",
-                data=form_data,
-                files=multipart_files,
-            )
-        return await self._request("POST", "/api/run", json={
+        payload: dict[str, Any] = {
             "session_key": session_key,
             "message": message,
             "project_path": project_path,
@@ -122,7 +102,10 @@ class SlaveClient:
             "claude_session_id": claude_session_id,
             "interactive": interactive,
             "timeout": timeout,
-        })
+        }
+        if image_urls:
+            payload["image_urls"] = image_urls
+        return await self._request("POST", "/api/run", json=payload)
 
     async def stream_events(self) -> AsyncGenerator[dict, None]:
         async for event in self._stream_sse("GET", "/api/events"):
