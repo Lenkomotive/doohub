@@ -152,7 +152,7 @@ export function CreatePipelineDialog() {
         <DialogHeader>
           <DialogTitle>New Pipeline</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-hidden">
           <div className="space-y-2">
             <Label>Repo</Label>
             <Select value={repoPath} onValueChange={handleRepoChange}>
@@ -198,15 +198,13 @@ export function CreatePipelineDialog() {
                           key={issue.number}
                           type="button"
                           onClick={() => toggleIssue(issue.number)}
-                          className={`flex w-full items-center gap-3 px-3.5 py-2 text-left text-sm transition-colors hover:bg-accent/40 ${selected ? "bg-primary/8" : ""}`}
+                          className={`flex w-full min-w-0 items-center gap-2.5 px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-accent/40 ${selected ? "bg-primary/8" : ""}`}
                         >
-                          <div className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors ${selected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/25"}`}>
-                            {selected && <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                          <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${selected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/25"}`}>
+                            {selected && <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                           </div>
-                          <span className="min-w-0 truncate text-[13px]">
-                            <span className="text-muted-foreground/60 mr-1.5">#{issue.number}</span>
-                            {issue.title}
-                          </span>
+                          <span className="text-muted-foreground/50 shrink-0">#{issue.number}</span>
+                          <span className="truncate">{issue.title}</span>
                         </button>
                       );
                     })}
