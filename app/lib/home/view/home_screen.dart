@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
       child: Scaffold(
         body: SafeArea(
+          bottom: false,
           child: IndexedStack(
             index: _currentIndex,
             children: const [
