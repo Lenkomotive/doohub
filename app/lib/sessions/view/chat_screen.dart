@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -379,6 +380,57 @@ String _truncate(String text, int maxLen) {
   return '${text.substring(0, maxLen)}...';
 }
 
+final _urlRegex = RegExp(r'https?://[^\s]+|www\.[^\s]+', caseSensitive: false);
+
+TextSpan _buildMessageTextSpan(String text, Color textColor, bool isUser) {
+  final matches = _urlRegex.allMatches(text).toList();
+  if (matches.isEmpty) {
+    return TextSpan(text: text);
+  }
+
+  final linkColor = isUser ? Colors.lightBlue.shade100 : Colors.blue;
+  final children = <TextSpan>[];
+  var lastEnd = 0;
+
+  for (final match in matches) {
+    if (match.start > lastEnd) {
+      children.add(TextSpan(text: text.substring(lastEnd, match.start)));
+    }
+
+    var url = match.group(0)!;
+    // Trim common trailing punctuation
+    while (url.isNotEmpty && '.,;:!?)>]\'"'.contains(url[url.length - 1])) {
+      url = url.substring(0, url.length - 1);
+    }
+    final displayEnd = match.start + url.length;
+
+    final launchable = url.startsWith('http') ? url : 'https://$url';
+    children.add(TextSpan(
+      text: url,
+      style: TextStyle(
+        color: linkColor,
+        decoration: TextDecoration.underline,
+        decorationColor: linkColor,
+      ),
+      recognizer: TapGestureRecognizer()
+        ..onTap = () => launchUrl(Uri.parse(launchable), mode: LaunchMode.externalApplication),
+    ));
+
+    // Add back any trimmed trailing punctuation as plain text
+    if (displayEnd < match.end) {
+      children.add(TextSpan(text: text.substring(displayEnd, match.end)));
+    }
+
+    lastEnd = match.end;
+  }
+
+  if (lastEnd < text.length) {
+    children.add(TextSpan(text: text.substring(lastEnd)));
+  }
+
+  return TextSpan(children: children);
+}
+
 class _MessageBubble extends StatelessWidget {
   final Message message;
 
@@ -404,8 +456,14 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (message.content.isNotEmpty)
-              SelectableText(
-                message.content,
+              SelectableText.rich(
+                _buildMessageTextSpan(
+                  message.content,
+                  isUser
+                      ? Theme.of(context).colorScheme.onPrimary
+                      : Theme.of(context).colorScheme.onSurface,
+                  isUser,
+                ),
                 style: TextStyle(
                   fontSize: 14,
                   color: isUser ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
