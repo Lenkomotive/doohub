@@ -17,6 +17,8 @@ from app.models.user import User
 from app.schemas.auth import (
     FcmTokenRequest,
     LoginRequest,
+    NotificationSettingsRequest,
+    NotificationSettingsResponse,
     RefreshRequest,
     TokenResponse,
     UserResponse,
@@ -97,3 +99,20 @@ def update_fcm_token(
 ):
     user.fcm_token = body.token
     db.commit()
+
+
+@router.get("/notifications", response_model=NotificationSettingsResponse)
+def get_notification_settings(user: User = Depends(get_current_user)):
+    return user
+
+
+@router.put("/notifications", response_model=NotificationSettingsResponse)
+def update_notification_settings(
+    body: NotificationSettingsRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user.notify_sessions = body.notify_sessions
+    user.notify_pipelines = body.notify_pipelines
+    db.commit()
+    return user

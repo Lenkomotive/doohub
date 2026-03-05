@@ -224,7 +224,7 @@ async def send_message(
     db.add(SessionMessage(session_id=session.id, role="assistant", content=response_text))
     db.commit()
 
-    if user.fcm_token and response_text:
+    if user.fcm_token and user.notify_sessions and response_text:
         preview = response_text[:100] + ("..." if len(response_text) > 100 else "")
         send_push(user.fcm_token, session.name or "Session reply", preview, {"session_key": session_key})
 

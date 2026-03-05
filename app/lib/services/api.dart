@@ -87,6 +87,18 @@ class ApiService {
     await _dio.put('/auth/fcm-token', data: {'token': token});
   }
 
+  Future<Map<String, dynamic>> getNotificationSettings() async {
+    final res = await _dio.get('/auth/notifications');
+    return res.data;
+  }
+
+  Future<void> updateNotificationSettings({required bool sessions, required bool pipelines}) async {
+    await _dio.put('/auth/notifications', data: {
+      'notify_sessions': sessions,
+      'notify_pipelines': pipelines,
+    });
+  }
+
   Future<void> logout() async {
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');

@@ -20,6 +20,18 @@ class FcmTokenRequest(BaseModel):
     token: str
 
 
+class NotificationSettingsRequest(BaseModel):
+    notify_sessions: bool
+    notify_pipelines: bool
+
+
+class NotificationSettingsResponse(BaseModel):
+    notify_sessions: bool
+    notify_pipelines: bool
+
+    model_config = {"from_attributes": True}
+
+
 class UserResponse(BaseModel):
     id: int
     username: str
