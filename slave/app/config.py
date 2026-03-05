@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     projects_dir: Path = Path("/projects")
     data_dir: Path = Path("/data")
     claude_md_src: Path = Path("/app/claude-md/CLAUDE.md")
+    backend_url: str = "http://backend:8000"
 
     model_config = {"env_prefix": "SLAVE_"}
 

@@ -34,6 +34,7 @@ services:
     build: ./slave
     environment:
       - SLAVE_API_KEY=change-me
+      - SLAVE_BACKEND_URL=http://backend:8000
     volumes:
       - slave-projects:/projects
       - slave-claude:/home/claude/.claude

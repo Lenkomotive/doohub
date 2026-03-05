@@ -1,7 +1,10 @@
 import asyncio
 import json
 import logging
+import tempfile
 from pathlib import Path
+
+import httpx
 
 from app.config import settings
 
@@ -100,6 +103,39 @@ def _resolve_cwd(project_path: str) -> str:
     return str(Path.home())
 
 
+async def _download_images(image_urls: list[str]) -> list[Path]:
+    """Download images from the backend and return local file paths."""
+    paths: list[Path] = []
+    base_url = settings.backend_url.rstrip("/")
+    async with httpx.AsyncClient(timeout=30) as client:
+        for url in image_urls:
+            try:
+                full_url = f"{base_url}{url}" if url.startswith("/") else url
+                resp = await client.get(full_url)
+                resp.raise_for_status()
+                ext = Path(url).suffix or ".png"
+                tmp = tempfile.NamedTemporaryFile(
+                    suffix=ext, prefix="img_", delete=False, dir="/tmp"
+                )
+                tmp.write(resp.content)
+                tmp.close()
+                paths.append(Path(tmp.name))
+            except Exception as e:
+                logger.warning("Failed to download image %s: %s", url, e)
+    return paths
+
+
+def _build_prompt_with_images(prompt: str, image_paths: list[Path]) -> str:
+    """Prepend image file references to the prompt so Claude can read them."""
+    if not image_paths:
+        return prompt
+    image_lines = "\n".join(f"- {p}" for p in image_paths)
+    return (
+        f"The user attached {len(image_paths)} image(s) to this message. "
+        f"Read them to see the visual content:\n{image_lines}\n\n{prompt}"
+    )
+
+
 async def run_prompt(
     prompt: str,
     project_path: str,
@@ -108,9 +144,14 @@ async def run_prompt(
     timeout: int = 300,
     session_key: str | None = None,
     interactive: bool = False,
+    image_urls: list[str] | None = None,
 ) -> dict:
     """Blocking Claude run. Returns parsed result dict."""
-    cmd = _build_cmd(prompt, model, claude_session_id, "json", interactive)
+    image_paths: list[Path] = []
+    if image_urls:
+        image_paths = await _download_images(image_urls)
+    effective_prompt = _build_prompt_with_images(prompt, image_paths)
+    cmd = _build_cmd(effective_prompt, model, claude_session_id, "json", interactive)
     _sync_claude_md()
     _ensure_claude_config()
     await _git_pull(project_path)
@@ -136,6 +177,8 @@ async def run_prompt(
         if session_key:
             _running_procs.pop(session_key, None)
         _ensure_claude_config()
+        for p in image_paths:
+            p.unlink(missing_ok=True)
 
     if proc.returncode != 0:
         err = stderr.decode("utf-8", errors="replace").strip()
@@ -157,13 +200,18 @@ async def stream_prompt(
     timeout: int = 300,
     session_key: str | None = None,
     interactive: bool = False,
+    image_urls: list[str] | None = None,
 ):
     """Streaming Claude run. Yields event dicts:
     - {"event": "token", "session_key": key, "token": "..."}
     - {"event": "done",  "session_key": key, "result": "...", "session_id": "...", "cost_usd": ...}
     - {"event": "error", "session_key": key, "error": "..."}
     """
-    cmd = _build_cmd(prompt, model, claude_session_id, "stream-json", interactive)
+    image_paths: list[Path] = []
+    if image_urls:
+        image_paths = await _download_images(image_urls)
+    effective_prompt = _build_prompt_with_images(prompt, image_paths)
+    cmd = _build_cmd(effective_prompt, model, claude_session_id, "stream-json", interactive)
     _sync_claude_md()
     _ensure_claude_config()
     await _git_pull(project_path)
@@ -224,6 +272,8 @@ async def stream_prompt(
         if session_key:
             _running_procs.pop(session_key, None)
         _ensure_claude_config()
+        for p in image_paths:
+            p.unlink(missing_ok=True)
 
     if proc.returncode != 0:
         err = (await proc.stderr.read()).decode("utf-8", errors="replace").strip()

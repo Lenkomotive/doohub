@@ -36,6 +36,7 @@ async def start_run(
     claude_session_id: str | None,
     interactive: bool,
     timeout: int,
+    image_urls: list[str] | None = None,
 ) -> asyncio.Queue:
     """Launch Claude as an independent background task. Returns a Queue the
     SSE endpoint reads. Disconnecting the SSE client does NOT cancel Claude."""
@@ -53,6 +54,7 @@ async def start_run(
                 timeout=timeout,
                 session_key=key,
                 interactive=interactive,
+                image_urls=image_urls,
             ):
                 try:
                     q.put_nowait(event)

@@ -25,6 +25,7 @@ class RunRequest(BaseModel):
     claude_session_id: str | None = None
     interactive: bool = False
     timeout: int = 300
+    image_urls: list[str] = []
 
 
 def _sse(event: str, data: dict) -> str:
@@ -68,6 +69,7 @@ async def run(req: RunRequest):
             timeout=req.timeout,
             session_key=req.session_key,
             interactive=req.interactive,
+            image_urls=req.image_urls,
         )
     finally:
         await _set_status(req.session_key, "idle")
@@ -140,6 +142,7 @@ async def run_stream(req: RunRequest):
         q = await start_run(
             req.session_key, req.message, req.project_path,
             req.model, req.claude_session_id, req.interactive, req.timeout,
+            req.image_urls,
         )
 
     async def generate():
