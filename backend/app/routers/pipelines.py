@@ -94,11 +94,13 @@ async def pipeline_sse(
         q = pipeline_events.subscribe()
         try:
             while True:
-                event = await asyncio.wait_for(q.get(), timeout=30)
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=30)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
                 if event.get("pipeline_key") in user_keys:
                     yield f"event: pipeline\ndata: {json.dumps(event)}\n\n"
-        except asyncio.TimeoutError:
-            yield ": keepalive\n\n"
         except asyncio.CancelledError:
             pass
         finally:

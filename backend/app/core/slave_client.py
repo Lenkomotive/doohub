@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -7,6 +8,7 @@ import httpx
 from fastapi import HTTPException
 
 from app.core.config import settings
+from app.core.session_events import session_events
 
 logger = logging.getLogger(__name__)
 
@@ -189,3 +191,16 @@ class SlaveClient:
 
 
 slave = SlaveClient()
+
+
+async def _session_event_consumer() -> None:
+    """Background task: consume slave SSE events and publish to SessionEventBus."""
+    while True:
+        try:
+            async for event in slave.stream_events():
+                await session_events.publish(event)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("Session event stream disconnected, reconnecting in 5s")
+        await asyncio.sleep(5)
