@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/session.dart';
 import '../../services/api.dart';
 import '../bloc/sessions_cubit.dart';
 import '../bloc/sessions_state.dart';
-import 'chat_screen.dart';
 
 class SessionsScreen extends StatelessWidget {
   const SessionsScreen({super.key});
@@ -17,12 +17,7 @@ class SessionsScreen extends StatelessWidget {
       sessionsCubit.fetchHistory(session.sessionKey);
     }
 
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => BlocProvider.value(
-        value: sessionsCubit,
-        child: ChatScreen(sessionKey: session.sessionKey),
-      ),
-    ));
+    context.push('/sessions/${session.sessionKey}');
   }
 
   void _showCreateSheet(BuildContext context) {
@@ -36,12 +31,7 @@ class SessionsScreen extends StatelessWidget {
         cubit: sessionsCubit,
         onCreated: (sessionKey) {
           sessionsCubit.fetchHistory(sessionKey);
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => BlocProvider.value(
-              value: sessionsCubit,
-              child: ChatScreen(sessionKey: sessionKey),
-            ),
-          ));
+          context.push('/sessions/$sessionKey');
         },
       ),
     );

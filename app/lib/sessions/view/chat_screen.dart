@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/attachment.dart';
 import '../../models/session.dart';
@@ -144,7 +145,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 icon: Icon(Icons.delete_outline, size: 20, color: Theme.of(context).colorScheme.error),
                 onPressed: () async {
                   await cubit.deleteSession(widget.sessionKey);
-                  if (context.mounted) Navigator.of(context).pop();
+                  if (context.mounted) context.pop();
                 },
               ),
             ],
