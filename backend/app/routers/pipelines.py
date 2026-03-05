@@ -157,6 +157,40 @@ async def delete_pipeline(
     db.commit()
 
 
+@router.get("/pipelines/{pipeline_key}/merge-status")
+async def get_merge_status(
+    pipeline_key: str,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipeline = _get_user_pipeline(db, pipeline_key, user.id)
+    if pipeline.status not in ("done", "merged"):
+        raise HTTPException(status_code=400, detail="Pipeline is not done yet")
+    if not pipeline.pr_number:
+        raise HTTPException(status_code=400, detail="Pipeline has no PR")
+    return await slave.check_merge_status(pipeline.repo_path, pipeline.pr_number)
+
+
+@router.post("/pipelines/{pipeline_key}/merge")
+async def merge_pipeline(
+    pipeline_key: str,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipeline = _get_user_pipeline(db, pipeline_key, user.id)
+    if pipeline.status != "done":
+        raise HTTPException(status_code=400, detail="Pipeline is not in done status")
+    if not pipeline.pr_number:
+        raise HTTPException(status_code=400, detail="Pipeline has no PR")
+
+    result = await slave.merge_pipeline(pipeline_key, pipeline.repo_path, pipeline.pr_number)
+    if result.get("success"):
+        pipeline.status = "merged"
+        db.commit()
+        await pipeline_events.publish({"pipeline_key": pipeline_key, "status": "merged"})
+    return result
+
+
 # --- internal callback (slave -> backend) ---
 
 

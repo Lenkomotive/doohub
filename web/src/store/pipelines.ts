@@ -21,6 +21,15 @@ export interface Pipeline {
   updated_at: string;
 }
 
+export interface MergeStatus {
+  mergeable: boolean;
+  has_conflicts: boolean;
+  already_merged: boolean;
+  checking: boolean;
+  merging: boolean;
+  error: string | null;
+}
+
 interface SSEConnection {
   close: () => void;
 }
@@ -30,6 +39,7 @@ interface PipelinesState {
   total: number;
   isLoading: boolean;
   sseConnection: SSEConnection | null;
+  mergeStatuses: Record<string, MergeStatus>;
   fetchPipelines: () => Promise<void>;
   createPipeline: (body: {
     repo_path: string;
@@ -39,6 +49,8 @@ interface PipelinesState {
   }) => Promise<boolean>;
   cancelPipeline: (key: string) => Promise<void>;
   deletePipeline: (key: string) => Promise<void>;
+  checkMergeStatus: (key: string) => Promise<void>;
+  mergePipeline: (key: string) => Promise<void>;
   connectSSE: () => void;
   disconnectSSE: () => void;
 }
@@ -54,6 +66,7 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
   total: 0,
   isLoading: false,
   sseConnection: null,
+  mergeStatuses: {},
 
   fetchPipelines: async () => {
     set({ isLoading: true });
@@ -91,6 +104,73 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
     const res = await apiFetch(`/pipelines/${key}`, { method: "DELETE" });
     if (!res.ok) {
       get().fetchPipelines();
+    }
+  },
+
+  checkMergeStatus: async (key) => {
+    set((state) => ({
+      mergeStatuses: {
+        ...state.mergeStatuses,
+        [key]: { ...(state.mergeStatuses[key] || { mergeable: false, has_conflicts: false, already_merged: false, merging: false, error: null }), checking: true },
+      },
+    }));
+    const res = await apiFetch(`/pipelines/${key}/merge-status`);
+    if (res.ok) {
+      const data = await res.json();
+      set((state) => ({
+        mergeStatuses: {
+          ...state.mergeStatuses,
+          [key]: { ...data, checking: false, merging: state.mergeStatuses[key]?.merging || false },
+        },
+      }));
+    } else {
+      set((state) => ({
+        mergeStatuses: {
+          ...state.mergeStatuses,
+          [key]: { mergeable: false, has_conflicts: false, already_merged: false, checking: false, merging: false, error: "Failed to check merge status" },
+        },
+      }));
+    }
+  },
+
+  mergePipeline: async (key) => {
+    set((state) => ({
+      mergeStatuses: {
+        ...state.mergeStatuses,
+        [key]: { ...(state.mergeStatuses[key] || { mergeable: false, has_conflicts: false, already_merged: false, checking: false, error: null }), merging: true },
+      },
+    }));
+    const res = await apiFetch(`/pipelines/${key}/merge`, { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        set((state) => {
+          const idx = state.pipelines.findIndex((p) => p.pipeline_key === key);
+          if (idx >= 0) {
+            const pipelines = [...state.pipelines];
+            pipelines[idx] = { ...pipelines[idx], status: "merged" };
+            return {
+              pipelines,
+              mergeStatuses: { ...state.mergeStatuses, [key]: { mergeable: false, has_conflicts: false, already_merged: true, checking: false, merging: false, error: null } },
+            };
+          }
+          return state;
+        });
+      } else {
+        set((state) => ({
+          mergeStatuses: {
+            ...state.mergeStatuses,
+            [key]: { ...(state.mergeStatuses[key] || { mergeable: false, has_conflicts: false, already_merged: false, checking: false }), merging: false, error: data.error || "Merge failed" },
+          },
+        }));
+      }
+    } else {
+      set((state) => ({
+        mergeStatuses: {
+          ...state.mergeStatuses,
+          [key]: { ...(state.mergeStatuses[key] || { mergeable: false, has_conflicts: false, already_merged: false, checking: false }), merging: false, error: "Merge request failed" },
+        },
+      }));
     }
   },
 
