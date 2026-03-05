@@ -1,5 +1,4 @@
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,45 +17,6 @@ void main() async {
 
   final prefs = await SharedPreferences.getInstance();
   runApp(DooHubApp(prefs: prefs));
-
-  // Init FCM in background, don't block app startup
-  Future.delayed(const Duration(milliseconds: 500), _initFCM);
-}
-
-Future<void> _initFCM() async {
-  try {
-    final messaging = FirebaseMessaging.instance;
-
-    // Request permissions
-    await messaging.requestPermission(
-      alert: true,
-      announcement: false,
-      badge: true,
-      carPlay: false,
-      criticalAlert: false,
-      provisional: false,
-      sound: true,
-    );
-
-    // On iOS, get APNS token first
-    try {
-      await messaging.getAPNSToken();
-    } catch (_) {}
-
-    // Get FCM token with retries
-    String? token;
-    for (var i = 0; i < 5 && token == null; i++) {
-      try {
-        token = await messaging.getToken();
-      } catch (_) {
-        if (i < 4) await Future.delayed(const Duration(seconds: 1));
-      }
-    }
-
-    FirebaseMessaging.onMessage.listen((message) {
-      // TODO: show in-app notification
-    });
-  } catch (_) {}
 }
 
 final _darkTheme = ThemeData(

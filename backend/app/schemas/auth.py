@@ -16,6 +16,10 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class FcmTokenRequest(BaseModel):
+    token: str
+
+
 class UserResponse(BaseModel):
     id: int
     username: str

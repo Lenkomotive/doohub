@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../services/api.dart';
+import '../../services/fcm.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
@@ -24,6 +25,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final user = await api.getMe();
       if (user != null) {
         emit(AuthAuthenticated(user['username']));
+        registerFcmToken(api);
         return;
       }
     }
@@ -38,6 +40,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final success = await api.login(event.username, event.password);
     if (success) {
       emit(AuthAuthenticated(event.username));
+      registerFcmToken(api);
     } else {
       emit(AuthLoginFailure());
     }

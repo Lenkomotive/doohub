@@ -10,10 +10,12 @@ from sqlalchemy.orm import Session as DBSession
 from app.core.auth import get_current_user, require_slave_api_key
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.fcm import send_push
 from app.core.pipeline_events import pipeline_events
 from app.core.slave_client import slave
 from app.models.pipeline import Pipeline
 from app.models.user import User
+
 from app.schemas.pipeline import CreatePipelineRequest, PipelineCallbackRequest
 
 logger = logging.getLogger(__name__)
@@ -235,6 +237,13 @@ async def pipeline_callback(
     if body.error:
         event["error"] = body.error
     await pipeline_events.publish(event)
+
+    if body.status in ("done", "failed"):
+        user = db.query(User).filter(User.id == pipeline.user_id).first()
+        if user and user.fcm_token:
+            title = "Pipeline finished" if body.status == "done" else "Pipeline failed"
+            desc = pipeline.issue_title or pipeline.task_description or ""
+            send_push(user.fcm_token, title, desc, {"pipeline_key": body.pipeline_key})
 
     return {"ok": True}
 

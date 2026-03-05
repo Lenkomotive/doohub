@@ -83,6 +83,10 @@ class ApiService {
     }
   }
 
+  Future<void> updateFcmToken(String token) async {
+    await _dio.put('/auth/fcm-token', data: {'token': token});
+  }
+
   Future<void> logout() async {
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');
