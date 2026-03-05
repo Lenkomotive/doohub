@@ -163,6 +163,18 @@ class SlaveClient:
             "pr_number": pr_number,
         })
 
+    async def check_merge_status(self, repo_path: str, pr_number: int) -> Any:
+        return await self._request("GET", "/api/orchestrate/merge-status", params={
+            "repo_path": repo_path,
+            "pr_number": pr_number,
+        })
+
+    async def merge_pipeline(self, pipeline_key: str, repo_path: str, pr_number: int) -> Any:
+        return await self._request("POST", f"/api/orchestrate/{pipeline_key}/merge", json={
+            "repo_path": repo_path,
+            "pr_number": pr_number,
+        })
+
     async def list_issues(self, repo_path: str, page: int = 1, per_page: int = 10) -> Any:
         return await self._request("GET", "/api/repos/issues", params={
             "repo_path": repo_path,

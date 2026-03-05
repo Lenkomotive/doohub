@@ -25,11 +25,21 @@ interface SSEConnection {
   close: () => void;
 }
 
+export interface MergeStatus {
+  mergeable: boolean;
+  has_conflicts: boolean;
+  already_merged?: boolean;
+  closed?: boolean;
+  error?: string;
+}
+
 interface PipelinesState {
   pipelines: Pipeline[];
   total: number;
   isLoading: boolean;
   sseConnection: SSEConnection | null;
+  mergeStatuses: Record<string, MergeStatus>;
+  mergingKeys: Set<string>;
   fetchPipelines: () => Promise<void>;
   createPipeline: (body: {
     repo_path: string;
@@ -39,6 +49,8 @@ interface PipelinesState {
   }) => Promise<boolean>;
   cancelPipeline: (key: string) => Promise<void>;
   deletePipeline: (key: string) => Promise<void>;
+  checkMergeStatus: (key: string) => Promise<void>;
+  mergePipeline: (key: string) => Promise<void>;
   connectSSE: () => void;
   disconnectSSE: () => void;
 }
@@ -54,6 +66,8 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
   total: 0,
   isLoading: false,
   sseConnection: null,
+  mergeStatuses: {},
+  mergingKeys: new Set(),
 
   fetchPipelines: async () => {
     set({ isLoading: true });
@@ -92,6 +106,40 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
     if (!res.ok) {
       get().fetchPipelines();
     }
+  },
+
+  checkMergeStatus: async (key) => {
+    const res = await apiFetch(`/pipelines/${key}/merge-status`);
+    if (res.ok) {
+      const data = await res.json();
+      set((state) => ({
+        mergeStatuses: { ...state.mergeStatuses, [key]: data },
+      }));
+      if (data.already_merged) {
+        set((state) => ({
+          pipelines: state.pipelines.map((p) =>
+            p.pipeline_key === key ? { ...p, status: "merged" } : p
+          ),
+        }));
+      }
+    }
+  },
+
+  mergePipeline: async (key) => {
+    set((state) => ({ mergingKeys: new Set([...state.mergingKeys, key]) }));
+    const res = await apiFetch(`/pipelines/${key}/merge`, { method: "POST" });
+    if (res.ok) {
+      set((state) => ({
+        pipelines: state.pipelines.map((p) =>
+          p.pipeline_key === key ? { ...p, status: "merged" } : p
+        ),
+      }));
+    }
+    set((state) => {
+      const next = new Set(state.mergingKeys);
+      next.delete(key);
+      return { mergingKeys: next };
+    });
   },
 
   connectSSE: () => {

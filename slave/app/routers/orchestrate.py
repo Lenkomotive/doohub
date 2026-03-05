@@ -58,6 +58,24 @@ async def cleanup_pipeline(pipeline_key: str, body: CleanupRequest):
     return {"status": "cleaned"}
 
 
+class MergeRequest(BaseModel):
+    repo_path: str
+    pr_number: int
+
+
+@router.get("/merge-status")
+async def get_merge_status(repo_path: str, pr_number: int):
+    return await orchestrator.check_merge_status(repo_path, pr_number)
+
+
+@router.post("/{pipeline_key}/merge")
+async def merge_pipeline(pipeline_key: str, body: MergeRequest):
+    result = await orchestrator.merge_pr(body.repo_path, body.pr_number)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Merge failed"))
+    return result
+
+
 @router.get("/status")
 async def list_running():
     return {"running": orchestrator.running_keys()}
