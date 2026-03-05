@@ -124,45 +124,6 @@
     @apply bg-background text-foreground;
   }
 
-  /* Native app feel — block all zoom on iOS */
-  html {
-    touch-action: pan-x pan-y;
-  }
-  html, body {
-    overscroll-behavior: none;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  /* Prevent text selection on UI elements, allow on content */
-  body {
-    -webkit-user-select: none;
-    user-select: none;
-  }
-
-  /* Allow text selection in actual content areas */
-  pre, p, .selectable, textarea, input, [contenteditable] {
-    -webkit-user-select: text;
-    user-select: text;
-  }
-
-  /* Prevent long-press context menu on UI */
-  button, a, nav, [role="button"] {
-    -webkit-touch-callout: none;
-  }
-
-  /* Smooth touch scrolling */
-  .overflow-y-auto, .overflow-auto {
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Tap feedback for interactive elements */
-  .tap-target {
-    transition: transform 0.1s ease, opacity 0.1s ease;
-  }
-  .tap-target:active {
-    transform: scale(0.97);
-    opacity: 0.8;
-  }
 }
 
 @keyframes typingDot {

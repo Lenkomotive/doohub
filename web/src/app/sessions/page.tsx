@@ -6,7 +6,6 @@ import { Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/app-shell";
 import { SessionCard } from "@/components/session-card";
-import { Swipeable } from "@/components/swipeable";
 import { CreateSessionDialog } from "@/components/create-session-dialog";
 import { useSessionsStore } from "@/store/sessions";
 import { SkeletonList } from "@/components/skeleton-card";
@@ -18,18 +17,18 @@ const filters = [
 ];
 
 function SessionsContent() {
-  const { sessions, sessionsTotal, sessionFilter, isLoading, fetchSessions, setSessionFilter, deleteSession } =
+  const { sessions, sessionsTotal, sessionFilter, isLoading, fetchSessions, setSessionFilter, deleteSession, connectSSE, disconnectSSE } =
     useSessionsStore();
   const router = useRouter();
 
   useEffect(() => {
     fetchSessions();
-    const interval = setInterval(() => fetchSessions(sessionFilter), 5000);
-    return () => clearInterval(interval);
-  }, [fetchSessions, sessionFilter]);
+    connectSSE();
+    return () => disconnectSSE();
+  }, [fetchSessions, connectSSE, disconnectSSE]);
 
   return (
-    <div className="p-5 md:p-6">
+    <div className="p-6">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-medium">Sessions</h2>
@@ -64,12 +63,13 @@ function SessionsContent() {
       ) : (
         <div className="grid gap-3">
           {sessions.map((session) => (
-            <Swipeable key={session.session_key} onDelete={() => deleteSession(session.session_key)}>
+            <div key={session.session_key} className="group">
               <SessionCard
                 session={session}
                 onClick={() => router.push(`/sessions/${session.session_key}`)}
+                onDelete={() => deleteSession(session.session_key)}
               />
-            </Swipeable>
+            </div>
           ))}
         </div>
       )}

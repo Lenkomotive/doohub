@@ -1,8 +1,9 @@
 "use client";
 
-import { Cpu, FolderGit2, MessageSquare } from "lucide-react";
+import { Cpu, FolderGit2, MessageSquare, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { Session } from "@/store/sessions";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -15,20 +16,35 @@ const statusVariant: Record<string, "default" | "secondary" | "destructive" | "o
 export function SessionCard({
   session,
   onClick,
+  onDelete,
 }: {
   session: Session;
   onClick: () => void;
+  onDelete: () => void;
 }) {
   return (
     <Card
-      className="tap-target cursor-pointer border-border/50 bg-card/50 transition-colors hover:bg-accent/50 active:scale-[0.97] active:opacity-80"
+      className="cursor-pointer border-border/50 bg-card/50 transition-colors hover:bg-accent/50"
       onClick={onClick}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <h3 className="text-sm font-medium">{session.session_key}</h3>
-        <Badge variant={statusVariant[session.status] || "secondary"}>
-          {session.status}
-        </Badge>
+        <div className="flex items-center gap-1">
+          <Badge variant={statusVariant[session.status] || "secondary"}>
+            {session.status}
+          </Badge>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { BlockZoom } from "@/components/block-zoom";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
@@ -17,24 +16,12 @@ const geistMono = Geist_Mono({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: "cover",
-  interactiveWidget: "resizes-content",
 };
 
 export const metadata: Metadata = {
   title: "DooHub",
   description: "Bot command center",
   manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "DooHub",
-  },
-  other: {
-    "mobile-web-app-capable": "yes",
-  },
 };
 
 const themeScript = `(function(){try{var t=localStorage.getItem("doohub-theme")||"dark";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme:dark)").matches);if(d)document.documentElement.classList.add("dark");else document.documentElement.classList.remove("dark")}catch(e){}})()`;
@@ -64,7 +51,6 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
-          <BlockZoom />
           {children}
         </ThemeProvider>
       </body>

@@ -30,6 +30,36 @@ export async function apiFetch(
   return res;
 }
 
+export async function apiUpload(
+  path: string,
+  body: FormData,
+): Promise<Response> {
+  const token = typeof window !== "undefined"
+    ? sessionStorage.getItem("access_token")
+    : null;
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers,
+    body,
+  });
+
+  if (res.status === 401 && token) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      headers["Authorization"] = `Bearer ${sessionStorage.getItem("access_token")}`;
+      return fetch(`${API_URL}${path}`, { method: "POST", headers, body });
+    }
+  }
+
+  return res;
+}
+
 async function tryRefresh(): Promise<boolean> {
   const refreshToken = sessionStorage.getItem("refresh_token");
   if (!refreshToken) return false;
