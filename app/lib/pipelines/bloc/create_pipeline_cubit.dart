@@ -90,9 +90,14 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
     emit(state.copyWith(submitting: true));
     try {
       for (final issueNumber in state.selectedIssueNumbers) {
+        final issue = state.issues.cast<Map<String, dynamic>?>().firstWhere(
+          (i) => i?['number'] == issueNumber,
+          orElse: () => null,
+        );
         await pipelinesCubit.createPipeline(
           repoPath: state.selectedRepo,
           issueNumber: issueNumber,
+          taskDescription: issue?['title'] as String?,
           model: state.selectedModel,
         );
       }
