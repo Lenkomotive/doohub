@@ -10,7 +10,7 @@ class CreatePipelineState extends Equatable {
   final bool loadingIssues;
   final bool loadingMoreIssues;
   final bool submitting;
-  final int issuesPage;
+  final String? issuesCursor;
   final bool hasMoreIssues;
 
   const CreatePipelineState({
@@ -23,7 +23,7 @@ class CreatePipelineState extends Equatable {
     this.loadingIssues = false,
     this.loadingMoreIssues = false,
     this.submitting = false,
-    this.issuesPage = 1,
+    this.issuesCursor,
     this.hasMoreIssues = false,
   });
 
@@ -37,7 +37,8 @@ class CreatePipelineState extends Equatable {
     bool? loadingIssues,
     bool? loadingMoreIssues,
     bool? submitting,
-    int? issuesPage,
+    String? issuesCursor,
+    bool clearCursor = false,
     bool? hasMoreIssues,
   }) {
     return CreatePipelineState(
@@ -50,7 +51,7 @@ class CreatePipelineState extends Equatable {
       loadingIssues: loadingIssues ?? this.loadingIssues,
       loadingMoreIssues: loadingMoreIssues ?? this.loadingMoreIssues,
       submitting: submitting ?? this.submitting,
-      issuesPage: issuesPage ?? this.issuesPage,
+      issuesCursor: clearCursor ? null : (issuesCursor ?? this.issuesCursor),
       hasMoreIssues: hasMoreIssues ?? this.hasMoreIssues,
     );
   }
@@ -66,7 +67,7 @@ class CreatePipelineState extends Equatable {
         loadingIssues,
         loadingMoreIssues,
         submitting,
-        issuesPage,
+        issuesCursor,
         hasMoreIssues,
       ];
 }

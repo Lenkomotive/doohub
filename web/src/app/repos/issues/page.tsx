@@ -25,27 +25,29 @@ function IssuesContent() {
 
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
 
-  const loadIssues = async (p: number) => {
-    const res = await apiFetch(`/repos/issues?repo_path=${encodeURIComponent(repoPath)}&page=${p}&per_page=20`);
+  const loadIssues = async (c?: string | null) => {
+    let url = `/repos/issues?repo_path=${encodeURIComponent(repoPath)}&per_page=30`;
+    if (c) url += `&cursor=${encodeURIComponent(c)}`;
+    const res = await apiFetch(url);
     if (res.ok) {
       const data = await res.json();
       const newIssues = data.issues || [];
-      if (p === 1) {
+      if (!c) {
         setIssues(newIssues);
       } else {
         setIssues((prev) => [...prev, ...newIssues]);
       }
-      setHasMore(newIssues.length === 20);
-      setPage(p);
+      setHasMore(data.has_more ?? false);
+      setCursor(data.end_cursor ?? null);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    if (repoPath) loadIssues(1);
+    if (repoPath) loadIssues();
   }, [repoPath]);
 
   return (
@@ -89,7 +91,7 @@ function IssuesContent() {
             <Button
               variant="ghost"
               className="w-full text-muted-foreground"
-              onClick={() => loadIssues(page + 1)}
+              onClick={() => loadIssues(cursor)}
             >
               Load more
             </Button>
