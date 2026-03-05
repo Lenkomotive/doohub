@@ -235,6 +235,16 @@ class ApiService {
     await _dio.delete('/pipelines/$key');
   }
 
+  Future<Map<String, dynamic>> checkMergeStatus(String key) async {
+    final res = await _dio.get('/pipelines/$key/merge-status');
+    return res.data;
+  }
+
+  Future<Map<String, dynamic>> mergePipeline(String key) async {
+    final res = await _dio.post('/pipelines/$key/merge');
+    return res.data;
+  }
+
   Stream<Map<String, dynamic>> pipelineEvents() async* {
     final token = await _storage.read(key: 'access_token');
     final uri = Uri.parse('$baseUrl/pipelines/events');

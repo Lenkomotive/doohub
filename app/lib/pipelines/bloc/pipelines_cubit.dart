@@ -36,6 +36,11 @@ class PipelinesCubit extends Cubit<PipelinesState> {
             return p;
           }).toList();
           emit(state.copyWith(pipelines: updated));
+
+          // Auto-check merge status when pipeline completes
+          if (newStatus == 'done') {
+            checkMergeStatus(key);
+          }
         } else {
           // New pipeline we don't know about yet — refetch
           fetchPipelines();
@@ -105,6 +110,43 @@ class PipelinesCubit extends Cubit<PipelinesState> {
       await api.deletePipeline(key);
     } catch (_) {
       fetchPipelines();
+    }
+  }
+
+  // ── Merge ──
+
+  Future<void> checkMergeStatus(String key) async {
+    try {
+      final data = await api.checkMergeStatus(key);
+      if (isClosed) return;
+      final ms = MergeStatus.fromJson(data);
+      emit(state.copyWith(
+        mergeStatuses: {...state.mergeStatuses, key: ms},
+      ));
+      if (ms.alreadyMerged) {
+        final updated = state.pipelines.map((p) {
+          if (p.pipelineKey == key) return p.copyWith(status: 'merged');
+          return p;
+        }).toList();
+        emit(state.copyWith(pipelines: updated));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> mergePipeline(String key) async {
+    emit(state.copyWith(mergingKeys: {...state.mergingKeys, key}));
+    try {
+      await api.mergePipeline(key);
+      if (isClosed) return;
+      final updated = state.pipelines.map((p) {
+        if (p.pipelineKey == key) return p.copyWith(status: 'merged');
+        return p;
+      }).toList();
+      emit(state.copyWith(pipelines: updated));
+    } catch (_) {}
+    if (!isClosed) {
+      final next = Set<String>.from(state.mergingKeys)..remove(key);
+      emit(state.copyWith(mergingKeys: next));
     }
   }
 
