@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -22,8 +22,8 @@ import { apiFetch } from "@/lib/api";
 import { usePipelinesStore } from "@/store/pipelines";
 
 const models = [
-  { value: "sonnet", label: "Sonnet" },
   { value: "opus", label: "Opus" },
+  { value: "sonnet", label: "Sonnet" },
   { value: "haiku", label: "Haiku" },
 ];
 
@@ -44,12 +44,13 @@ export function CreatePipelineDialog() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [issuesCursor, setIssuesCursor] = useState<string | null>(null);
   const [hasMoreIssues, setHasMoreIssues] = useState(false);
-  const [model, setModel] = useState("sonnet");
+  const [model, setModel] = useState("opus");
   const [repoPath, setRepoPath] = useState("");
   const [selectedIssues, setSelectedIssues] = useState<number[]>([]);
-  const [taskDescription, setTaskDescription] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
 
   const { createPipeline } = usePipelinesStore();
 
@@ -63,15 +64,15 @@ export function CreatePipelineDialog() {
       });
     } else {
       setRepoPath("");
-      setModel("sonnet");
+      setModel("opus");
       setSelectedIssues([]);
-      setTaskDescription("");
       setIssues([]);
       setError("");
     }
   }, [open]);
 
-  const loadIssues = async (repo: string, cursor?: string | null) => {
+  const loadIssues = useCallback(async (repo: string, cursor?: string | null) => {
+    if (cursor) setLoadingMore(true);
     let url = `/repos/issues?repo_path=${encodeURIComponent(repo)}&per_page=30`;
     if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`;
     const res = await apiFetch(url);
@@ -86,7 +87,8 @@ export function CreatePipelineDialog() {
       setHasMoreIssues(data.has_more ?? false);
       setIssuesCursor(data.end_cursor ?? null);
     }
-  };
+    setLoadingMore(false);
+  }, []);
 
   const handleRepoChange = (path: string) => {
     setRepoPath(path);
@@ -97,6 +99,14 @@ export function CreatePipelineDialog() {
       loadIssues(path);
     }
   };
+
+  const handleScroll = useCallback(() => {
+    const el = listRef.current;
+    if (!el || loadingMore || !hasMoreIssues || !issuesCursor) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+      loadIssues(repoPath, issuesCursor);
+    }
+  }, [loadingMore, hasMoreIssues, issuesCursor, repoPath, loadIssues]);
 
   const toggleIssue = (num: number) => {
     setSelectedIssues((prev) =>
@@ -110,27 +120,19 @@ export function CreatePipelineDialog() {
       setError("Repo is required");
       return;
     }
-    if (selectedIssues.length === 0 && !taskDescription.trim()) {
-      setError("Select at least one issue or provide a task description");
+    if (selectedIssues.length === 0) {
+      setError("Select at least one issue");
       return;
     }
 
     setLoading(true);
 
-    if (selectedIssues.length > 0) {
-      for (const issueNum of selectedIssues) {
-        const issue = issues.find((i) => i.number === issueNum);
-        await createPipeline({
-          repo_path: repoPath,
-          issue_number: issueNum,
-          task_description: issue?.title || undefined,
-          model,
-        });
-      }
-    } else {
+    for (const issueNum of selectedIssues) {
+      const issue = issues.find((i) => i.number === issueNum);
       await createPipeline({
         repo_path: repoPath,
-        task_description: taskDescription.trim(),
+        issue_number: issueNum,
+        task_description: issue?.title || undefined,
         model,
       });
     }
@@ -181,49 +183,44 @@ export function CreatePipelineDialog() {
               </SelectContent>
             </Select>
           </div>
-          {repoPath && issues.length > 0 && (
+          {repoPath && (
             <div className="space-y-2">
-              <Label>Issues (optional)</Label>
-              <div className="max-h-48 overflow-y-auto rounded-md border border-border/50 divide-y divide-border/30">
-                {issues.map((issue) => (
-                  <label
-                    key={issue.number}
-                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent/50 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedIssues.includes(issue.number)}
-                      onChange={() => toggleIssue(issue.number)}
-                      className="h-3.5 w-3.5 rounded border-border"
-                    />
-                    <span className="text-muted-foreground">#{issue.number}</span>
-                    <span className="truncate">{issue.title}</span>
-                  </label>
-                ))}
-                {hasMoreIssues && (
-                  <button
-                    className="w-full px-3 py-2 text-xs text-muted-foreground hover:bg-accent/50"
-                    onClick={() => loadIssues(repoPath, issuesCursor)}
-                  >
-                    Load more...
-                  </button>
+              <Label>Issues</Label>
+              <div ref={listRef} onScroll={handleScroll} className="max-h-64 overflow-y-auto rounded-lg border border-border/50">
+                {issues.length === 0 ? (
+                  <p className="px-3 py-4 text-center text-sm text-muted-foreground">No open issues</p>
+                ) : (
+                  <>
+                    {issues.map((issue) => {
+                      const selected = selectedIssues.includes(issue.number);
+                      return (
+                        <button
+                          key={issue.number}
+                          type="button"
+                          onClick={() => toggleIssue(issue.number)}
+                          className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent/50 border-b border-border/30 last:border-b-0 ${selected ? "bg-primary/10" : ""}`}
+                        >
+                          <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30"}`}>
+                            {selected && <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                          </div>
+                          <span className="text-xs text-muted-foreground/70">#{issue.number}</span>
+                          <span className="truncate">{issue.title}</span>
+                        </button>
+                      );
+                    })}
+                    {hasMoreIssues && (
+                      <div className="flex justify-center py-2">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
           )}
-          <div className="space-y-2">
-            <Label>Task description {selectedIssues.length > 0 ? "(optional)" : ""}</Label>
-            <textarea
-              value={taskDescription}
-              onChange={(e) => setTaskDescription(e.target.value)}
-              placeholder="Describe the task..."
-              rows={3}
-              className="w-full resize-none rounded-md border border-border/50 bg-muted/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button onClick={handleCreate} disabled={loading} className="w-full">
-            {loading ? "Creating..." : "Create pipeline"}
+            {loading ? "Creating..." : selectedIssues.length > 1 ? `Create ${selectedIssues.length} pipelines` : "Create pipeline"}
           </Button>
         </div>
       </DialogContent>
