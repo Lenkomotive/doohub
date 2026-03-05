@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { GitBranch } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PipelineCard } from "@/components/pipeline-card";
@@ -9,6 +10,7 @@ import { usePipelinesStore } from "@/store/pipelines";
 import { SkeletonList } from "@/components/skeleton-card";
 
 function PipelinesContent() {
+  const router = useRouter();
   const {
     pipelines, total, isLoading, mergeStatuses,
     fetchPipelines, cancelPipeline, deletePipeline,
@@ -54,6 +56,7 @@ function PipelinesContent() {
               key={pipeline.pipeline_key}
               pipeline={pipeline}
               mergeStatus={mergeStatuses[pipeline.pipeline_key]}
+              onClick={() => router.push(`/pipelines/${pipeline.pipeline_key}`)}
               onCancel={() => cancelPipeline(pipeline.pipeline_key)}
               onDelete={() => deletePipeline(pipeline.pipeline_key)}
               onCheckMergeStatus={() => handleCheckMergeStatus(pipeline.pipeline_key)}
