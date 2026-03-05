@@ -148,7 +148,7 @@ export function CreatePipelineDialog() {
           <Plus className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New Pipeline</DialogTitle>
         </DialogHeader>
@@ -186,7 +186,7 @@ export function CreatePipelineDialog() {
           {repoPath && (
             <div className="space-y-2">
               <Label>Issues</Label>
-              <div ref={listRef} onScroll={handleScroll} className="max-h-64 overflow-y-auto rounded-lg border border-border/50">
+              <div ref={listRef} onScroll={handleScroll} className="max-h-72 overflow-y-auto scrollbar-none rounded-lg border border-border/50">
                 {issues.length === 0 ? (
                   <p className="px-3 py-4 text-center text-sm text-muted-foreground">No open issues</p>
                 ) : (
@@ -198,13 +198,15 @@ export function CreatePipelineDialog() {
                           key={issue.number}
                           type="button"
                           onClick={() => toggleIssue(issue.number)}
-                          className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-accent/50 border-b border-border/30 last:border-b-0 ${selected ? "bg-primary/10" : ""}`}
+                          className={`flex w-full items-center gap-3 px-3.5 py-2 text-left text-sm transition-colors hover:bg-accent/40 ${selected ? "bg-primary/8" : ""}`}
                         >
-                          <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30"}`}>
+                          <div className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors ${selected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/25"}`}>
                             {selected && <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                           </div>
-                          <span className="text-xs text-muted-foreground/70">#{issue.number}</span>
-                          <span className="truncate">{issue.title}</span>
+                          <span className="min-w-0 truncate text-[13px]">
+                            <span className="text-muted-foreground/60 mr-1.5">#{issue.number}</span>
+                            {issue.title}
+                          </span>
                         </button>
                       );
                     })}
