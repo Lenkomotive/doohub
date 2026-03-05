@@ -1,10 +1,11 @@
 "use client";
 
-import { ExternalLink, Trash2, XCircle } from "lucide-react";
+import { useEffect } from "react";
+import { ExternalLink, GitMerge, Loader2, Trash2, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { Pipeline } from "@/store/pipelines";
+import type { Pipeline, MergeStatus } from "@/store/pipelines";
 import { isActive } from "@/store/pipelines";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -14,24 +15,39 @@ const statusVariant: Record<string, "default" | "secondary" | "destructive" | "o
   developed: "default",
   reviewing: "default",
   done: "outline",
+  merged: "secondary",
   failed: "destructive",
   cancelled: "secondary",
 };
 
 export function PipelineCard({
   pipeline,
+  mergeStatus,
   onCancel,
   onDelete,
+  onCheckMergeStatus,
+  onMerge,
 }: {
   pipeline: Pipeline;
+  mergeStatus?: MergeStatus;
   onCancel: () => void;
   onDelete: () => void;
+  onCheckMergeStatus: () => void;
+  onMerge: () => void;
 }) {
   const title =
     pipeline.issue_title ||
     pipeline.task_description ||
     `Pipeline ${pipeline.pipeline_key}`;
   const repoName = pipeline.repo_path.split("/").pop() || pipeline.repo_path;
+
+  useEffect(() => {
+    if (pipeline.status === "done" && pipeline.pr_number && !mergeStatus) {
+      onCheckMergeStatus();
+    }
+  }, [pipeline.status, pipeline.pr_number, mergeStatus, onCheckMergeStatus]);
+
+  const prConflictsUrl = pipeline.pr_url ? `${pipeline.pr_url}/conflicts` : null;
 
   return (
     <Card className="border-border/50 bg-card/50 transition-colors hover:bg-accent/50">
@@ -86,6 +102,40 @@ export function PipelineCard({
         )}
         {pipeline.error && (
           <span className="text-destructive truncate max-w-xs">{pipeline.error}</span>
+        )}
+
+        {/* Merge controls for done pipelines */}
+        {pipeline.status === "done" && mergeStatus && (
+          <div className="ml-auto flex items-center gap-2">
+            {mergeStatus.checking && (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            )}
+            {!mergeStatus.checking && mergeStatus.already_merged && (
+              <span className="text-muted-foreground">Already merged</span>
+            )}
+            {!mergeStatus.checking && mergeStatus.has_conflicts && prConflictsUrl && (
+              <a href={prConflictsUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                <Button variant="outline" size="sm" className="h-6 text-xs border-orange-500 text-orange-500 hover:bg-orange-500/10">
+                  Resolve Conflicts
+                </Button>
+              </a>
+            )}
+            {!mergeStatus.checking && mergeStatus.mergeable && !mergeStatus.has_conflicts && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs border-green-500 text-green-500 hover:bg-green-500/10"
+                disabled={mergeStatus.merging}
+                onClick={(e) => { e.stopPropagation(); onMerge(); }}
+              >
+                {mergeStatus.merging ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <GitMerge className="h-3 w-3 mr-1" />}
+                Merge
+              </Button>
+            )}
+            {!mergeStatus.checking && mergeStatus.error && (
+              <span className="text-destructive text-xs truncate max-w-[200px]">{mergeStatus.error}</span>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

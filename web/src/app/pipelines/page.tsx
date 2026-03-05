@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { GitBranch } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PipelineCard } from "@/components/pipeline-card";
@@ -9,14 +9,26 @@ import { usePipelinesStore } from "@/store/pipelines";
 import { SkeletonList } from "@/components/skeleton-card";
 
 function PipelinesContent() {
-  const { pipelines, total, isLoading, fetchPipelines, cancelPipeline, deletePipeline, connectSSE, disconnectSSE } =
-    usePipelinesStore();
+  const {
+    pipelines, total, isLoading, mergeStatuses,
+    fetchPipelines, cancelPipeline, deletePipeline,
+    checkMergeStatus, mergePipeline,
+    connectSSE, disconnectSSE,
+  } = usePipelinesStore();
 
   useEffect(() => {
     fetchPipelines();
     connectSSE();
     return () => disconnectSSE();
   }, [fetchPipelines, connectSSE, disconnectSSE]);
+
+  const handleCheckMergeStatus = useCallback((key: string) => {
+    checkMergeStatus(key);
+  }, [checkMergeStatus]);
+
+  const handleMerge = useCallback((key: string) => {
+    mergePipeline(key);
+  }, [mergePipeline]);
 
   return (
     <div className="p-6">
@@ -41,8 +53,11 @@ function PipelinesContent() {
             <PipelineCard
               key={pipeline.pipeline_key}
               pipeline={pipeline}
+              mergeStatus={mergeStatuses[pipeline.pipeline_key]}
               onCancel={() => cancelPipeline(pipeline.pipeline_key)}
               onDelete={() => deletePipeline(pipeline.pipeline_key)}
+              onCheckMergeStatus={() => handleCheckMergeStatus(pipeline.pipeline_key)}
+              onMerge={() => handleMerge(pipeline.pipeline_key)}
             />
           ))}
         </div>

@@ -404,6 +404,54 @@ async def _run_pipeline(ctx: dict) -> None:
         _tasks.pop(key, None)
 
 
+# ── Merge Helpers ─────────────────────────────────────────────────────────────
+
+
+async def check_merge_status(repo_path: str, pr_number: int) -> dict:
+    """Check if a PR is mergeable and whether it has conflicts."""
+    code, out = await _run_gh(
+        repo_path, "pr", "view", str(pr_number),
+        "--json", "mergeable,state,mergeStateStatus",
+    )
+    if code != 0:
+        return {"mergeable": False, "has_conflicts": False, "already_merged": False, "error": f"Failed to check PR: {out}"}
+
+    try:
+        data = json.loads(out)
+    except json.JSONDecodeError:
+        return {"mergeable": False, "has_conflicts": False, "already_merged": False, "error": "Failed to parse PR data"}
+
+    state = data.get("state", "").upper()
+    mergeable = data.get("mergeable", "").upper()
+    merge_state = data.get("mergeStateStatus", "").upper()
+
+    if state == "MERGED":
+        return {"mergeable": False, "has_conflicts": False, "already_merged": True, "error": None}
+    if state == "CLOSED":
+        return {"mergeable": False, "has_conflicts": False, "already_merged": False, "error": "PR is closed"}
+
+    has_conflicts = mergeable == "CONFLICTING" or merge_state == "DIRTY"
+    is_mergeable = mergeable == "MERGEABLE" and not has_conflicts
+
+    return {
+        "mergeable": is_mergeable,
+        "has_conflicts": has_conflicts,
+        "already_merged": False,
+        "error": None,
+    }
+
+
+async def merge_pr(repo_path: str, pr_number: int) -> dict:
+    """Merge a PR using squash merge and delete the branch."""
+    code, out = await _run_gh(
+        repo_path, "pr", "merge", str(pr_number),
+        "--squash", "--delete-branch",
+    )
+    if code != 0:
+        return {"success": False, "error": out or "Merge failed"}
+    return {"success": True, "error": None}
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 
