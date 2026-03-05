@@ -1,3 +1,4 @@
+import asyncio
 import json
 from uuid import uuid4
 
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.core.auth import get_current_user
 from app.core.database import get_db
+from app.core.session_events import session_events as session_event_bus
 from app.core.slave_client import slave
 from app.models.session import Session, SessionMessage
 from app.models.user import User
@@ -86,21 +88,32 @@ async def session_events(
 
     async def generate():
         snapshot_sent = False
-        async for event in slave.stream_events():
-            evt = event.get("event")
-            if evt == "snapshot" and not snapshot_sent:
-                busy_keys = set(event.get("sessions", {}).keys())
-                merged = {
-                    key: {
-                        **session_map[key],
-                        "status": "busy" if key in busy_keys else "idle",
+        q = session_event_bus.subscribe()
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=30)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                evt = event.get("event")
+                if evt == "snapshot" and not snapshot_sent:
+                    busy_keys = set(event.get("sessions", {}).keys())
+                    merged = {
+                        key: {
+                            **session_map[key],
+                            "status": "busy" if key in busy_keys else "idle",
+                        }
+                        for key in user_keys
                     }
-                    for key in user_keys
-                }
-                yield f"event: snapshot\ndata: {json.dumps({'sessions': merged})}\n\n"
-                snapshot_sent = True
-            elif evt == "status" and event.get("session_key") in user_keys:
-                yield f"event: status\ndata: {json.dumps(event)}\n\n"
+                    yield f"event: snapshot\ndata: {json.dumps({'sessions': merged})}\n\n"
+                    snapshot_sent = True
+                elif evt == "status" and event.get("session_key") in user_keys:
+                    yield f"event: status\ndata: {json.dumps(event)}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            session_event_bus.unsubscribe(q)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
