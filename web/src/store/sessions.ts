@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
+import { connectSSE } from "@/lib/sse";
 
 export interface Session {
   session_key: string;
@@ -10,14 +11,21 @@ export interface Session {
   interactive: boolean;
 }
 
+interface SSEConnection {
+  close: () => void;
+}
+
 interface SessionsState {
   sessions: Session[];
   sessionsTotal: number;
   isLoading: boolean;
   sessionFilter: string | null;
+  sseConnection: SSEConnection | null;
   fetchSessions: (status?: string | null) => Promise<void>;
   deleteSession: (key: string) => Promise<void>;
   setSessionFilter: (status: string | null) => void;
+  connectSSE: () => void;
+  disconnectSSE: () => void;
 }
 
 export const useSessionsStore = create<SessionsState>((set, get) => ({
@@ -25,6 +33,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   sessionsTotal: 0,
   isLoading: false,
   sessionFilter: null,
+  sseConnection: null,
 
   setSessionFilter: (status) => {
     set({ sessionFilter: status });
@@ -32,14 +41,12 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
   },
 
   deleteSession: async (key) => {
-    // Optimistic removal
     set((state) => ({
       sessions: state.sessions.filter((s) => s.session_key !== key),
       sessionsTotal: state.sessionsTotal - 1,
     }));
     const res = await apiFetch(`/sessions/${key}`, { method: "DELETE" });
     if (!res.ok) {
-      // Refetch if delete failed
       get().fetchSessions(get().sessionFilter);
     }
   },
@@ -58,4 +65,41 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     }
   },
 
+  connectSSE: () => {
+    const existing = get().sseConnection;
+    if (existing) existing.close();
+
+    const conn = connectSSE("/sessions/events", (event, data) => {
+      if (event === "snapshot") {
+        const sessionsMap = (data as { sessions: Record<string, Session> }).sessions;
+        const sessions = Object.entries(sessionsMap).map(([key, s]) => ({
+          ...s,
+          session_key: key,
+        }));
+        const filter = get().sessionFilter;
+        const filtered = filter ? sessions.filter((s) => s.status === filter) : sessions;
+        set({ sessions: filtered, sessionsTotal: filtered.length });
+      } else if (event === "status") {
+        const update = data as { session_key: string; status: string };
+        set((state) => {
+          const sessions = state.sessions.map((s) =>
+            s.session_key === update.session_key
+              ? { ...s, status: update.status as "idle" | "busy" }
+              : s
+          );
+          return { sessions };
+        });
+      }
+    });
+
+    set({ sseConnection: conn });
+  },
+
+  disconnectSSE: () => {
+    const conn = get().sseConnection;
+    if (conn) {
+      conn.close();
+      set({ sseConnection: null });
+    }
+  },
 }));

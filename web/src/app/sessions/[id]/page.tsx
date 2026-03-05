@@ -10,17 +10,30 @@ import {
   FolderGit2,
   Trash2,
   XCircle,
+  Paperclip,
+  X,
+  FileIcon,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AuthGuard } from "@/components/auth-guard";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
+
+interface Attachment {
+  id: number;
+  filename: string;
+  mime_type: string;
+  file_size: number;
+  url: string;
+}
 
 interface Message {
   id: number;
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  attachments?: Attachment[];
 }
 
 interface SessionInfo {
@@ -32,6 +45,12 @@ interface SessionInfo {
   claude_session_id: string | null;
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function ChatView() {
   const params = useParams();
   const router = useRouter();
@@ -41,8 +60,10 @@ function ChatView() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchSession = async () => {
     const res = await apiFetch(`/sessions/${sessionKey}`);
@@ -71,11 +92,13 @@ function ChatView() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || sending) return;
+    if ((!input.trim() && pendingFiles.length === 0) || sending) return;
 
     const message = input.trim();
     setInput("");
     setSending(true);
+    const filesToSend = [...pendingFiles];
+    setPendingFiles([]);
 
     const optimisticMsg: Message = {
       id: Date.now(),
@@ -85,10 +108,20 @@ function ChatView() {
     };
     setMessages((prev) => [...prev, optimisticMsg]);
 
-    const res = await apiFetch(`/sessions/${sessionKey}/messages`, {
-      method: "POST",
-      body: JSON.stringify({ content: message }),
-    });
+    let res: Response;
+    if (filesToSend.length > 0) {
+      const formData = new FormData();
+      formData.append("content", message);
+      for (const file of filesToSend) {
+        formData.append("files", file);
+      }
+      res = await apiUpload(`/sessions/${sessionKey}/messages`, formData);
+    } else {
+      res = await apiFetch(`/sessions/${sessionKey}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ content: message }),
+      });
+    }
 
     if (res.ok) {
       const data = await res.json();
@@ -127,18 +160,28 @@ function ChatView() {
     router.push("/sessions");
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setPendingFiles((prev) => [...prev, ...files].slice(0, 5));
+    e.target.value = "";
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   if (!session) {
     return (
-      <div className="flex h-[100dvh] items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background">
+    <div className="flex h-screen flex-col bg-background">
       {/* Header */}
-      <header className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2 pt-[env(safe-area-inset-top)]">
+      <header className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -205,6 +248,23 @@ function ChatView() {
                 }`}
               >
                 <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {msg.attachments.map((att) => (
+                      <a
+                        key={att.id}
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 rounded-lg bg-background/20 px-2 py-1 text-xs hover:bg-background/30"
+                      >
+                        <Download className="h-3 w-3" />
+                        <span className="truncate">{att.filename}</span>
+                        <span className="text-[10px] opacity-70">{formatFileSize(att.file_size)}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -221,9 +281,43 @@ function ChatView() {
         </div>
       </div>
 
+      {/* Pending files */}
+      {pendingFiles.length > 0 && (
+        <div className="shrink-0 border-t border-border/50 px-3 py-2">
+          <div className="mx-auto flex max-w-3xl flex-wrap gap-2">
+            {pendingFiles.map((file, i) => (
+              <div key={i} className="flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1 text-xs">
+                <FileIcon className="h-3 w-3 text-muted-foreground" />
+                <span className="max-w-32 truncate">{file.name}</span>
+                <span className="text-muted-foreground">{formatFileSize(file.size)}</span>
+                <button onClick={() => removePendingFile(i)} className="ml-0.5 text-muted-foreground hover:text-foreground">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input */}
-      <div className="shrink-0 border-t border-border/50 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="shrink-0 border-t border-border/50 px-3 py-2">
         <div className="mx-auto flex max-w-3xl items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0 text-muted-foreground"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending}
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
           <textarea
             ref={textareaRef}
             value={input}
@@ -237,7 +331,7 @@ function ChatView() {
           <Button
             size="icon"
             onClick={handleSend}
-            disabled={!input.trim() || sending}
+            disabled={(!input.trim() && pendingFiles.length === 0) || sending}
             className="h-9 w-9 shrink-0 rounded-2xl"
           >
             <Send className="h-4 w-4" />
