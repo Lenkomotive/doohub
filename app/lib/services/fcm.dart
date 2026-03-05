@@ -35,9 +35,5 @@ Future<void> registerFcmToken(ApiService api) async {
     messaging.onTokenRefresh.listen((newToken) {
       api.updateFcmToken(newToken);
     });
-
-    FirebaseMessaging.onMessage.listen((message) {
-      // TODO: show in-app notification
-    });
   } catch (_) {}
 }

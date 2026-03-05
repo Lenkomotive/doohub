@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.core.auth import get_current_user
 from app.core.database import get_db
+from app.core.fcm import send_push
 from app.core.session_events import session_events as session_event_bus
 from app.core.slave_client import slave
 from app.models.session import Session, SessionMessage
@@ -222,6 +223,10 @@ async def send_message(
         session.claude_session_id = new_claude_sid
     db.add(SessionMessage(session_id=session.id, role="assistant", content=response_text))
     db.commit()
+
+    if user.fcm_token and response_text:
+        preview = response_text[:100] + ("..." if len(response_text) > 100 else "")
+        send_push(user.fcm_token, session.name or "Session reply", preview, {"session_key": session_key})
 
     return {
         "role": "assistant",
