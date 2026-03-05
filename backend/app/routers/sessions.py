@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.core.session_events import session_events
+from app.core.session_events import session_events as session_event_bus
 from app.core.slave_client import slave
 from app.models.session import Session, SessionMessage
 from app.models.user import User
@@ -88,7 +88,7 @@ async def session_events(
 
     async def generate():
         snapshot_sent = False
-        q = session_events.subscribe()
+        q = session_event_bus.subscribe()
         try:
             while True:
                 try:
@@ -113,7 +113,7 @@ async def session_events(
         except asyncio.CancelledError:
             pass
         finally:
-            session_events.unsubscribe(q)
+            session_event_bus.unsubscribe(q)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
