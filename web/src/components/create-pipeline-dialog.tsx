@@ -148,7 +148,7 @@ export function CreatePipelineDialog() {
           <Plus className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>New Pipeline</DialogTitle>
         </DialogHeader>
@@ -186,7 +186,7 @@ export function CreatePipelineDialog() {
           {repoPath && (
             <div className="space-y-2">
               <Label>Issues</Label>
-              <div ref={listRef} onScroll={handleScroll} className="max-h-72 overflow-y-auto scrollbar-none rounded-lg border border-border/50">
+              <div ref={listRef} onScroll={handleScroll} className="max-h-72 overflow-y-auto overflow-x-hidden rounded-lg border border-border/50" style={{ scrollbarWidth: "none" }}>
                 {issues.length === 0 ? (
                   <p className="px-3 py-4 text-center text-sm text-muted-foreground">No open issues</p>
                 ) : (
