@@ -1,5 +1,6 @@
 services:
   backend:
+    container_name: doohub-backend
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
@@ -17,6 +18,7 @@ services:
       - doohub-net
 
   slave:
+    container_name: doohub-slave
     build:
       context: ./slave
     env_file: .env.slave
@@ -29,6 +31,7 @@ services:
       - doohub-net
 
   adminer:
+    container_name: doohub-adminer
     image: adminer:latest
     ports:
       - "8080:8080"
@@ -38,6 +41,7 @@ services:
         condition: service_healthy
 
   db:
+    container_name: doohub-db
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=doohub
