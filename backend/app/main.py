@@ -1,6 +1,7 @@
 # FastAPI application entry point for the DooHub backend.
 # Initializes the app, configures CORS middleware, registers routers
 # (auth, sessions, pipelines), and exposes a /health endpoint.
+# test: vercel should skip this
 
 import asyncio
 import os
