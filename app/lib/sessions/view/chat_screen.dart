@@ -9,6 +9,7 @@ import '../../models/session.dart';
 import '../../models/message.dart';
 import '../bloc/sessions_cubit.dart';
 import '../bloc/sessions_state.dart';
+import 'markdown_message.dart';
 
 class ChatScreen extends StatefulWidget {
   final String sessionKey;
@@ -457,19 +458,19 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (message.content.isNotEmpty)
-              SelectableText.rich(
-                _buildMessageTextSpan(
-                  message.content,
-                  isUser
-                      ? Theme.of(context).colorScheme.onPrimary
-                      : Theme.of(context).colorScheme.onSurface,
-                  isUser,
-                ),
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isUser ? Theme.of(context).colorScheme.onPrimary : Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
+              isUser
+                  ? SelectableText.rich(
+                      _buildMessageTextSpan(
+                        message.content,
+                        Theme.of(context).colorScheme.onPrimary,
+                        true,
+                      ),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    )
+                  : MarkdownMessage(data: message.content),
             for (final att in message.attachments)
               _AttachmentCard(attachment: att, isUser: isUser),
           ],
