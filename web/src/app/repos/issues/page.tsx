@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useCallback, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft, CircleDot } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
@@ -25,10 +24,13 @@ function IssuesContent() {
 
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const loadIssues = async (c?: string | null) => {
+  const loadIssues = useCallback(async (c?: string | null) => {
+    if (c) setLoadingMore(true);
     let url = `/repos/issues?repo_path=${encodeURIComponent(repoPath)}&per_page=30`;
     if (c) url += `&cursor=${encodeURIComponent(c)}`;
     const res = await apiFetch(url);
@@ -44,11 +46,24 @@ function IssuesContent() {
       setCursor(data.end_cursor ?? null);
     }
     setLoading(false);
-  };
+    setLoadingMore(false);
+  }, [repoPath]);
 
   useEffect(() => {
     if (repoPath) loadIssues();
-  }, [repoPath]);
+  }, [repoPath, loadIssues]);
+
+  useEffect(() => {
+    if (!hasMore || !cursor || loadingMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) loadIssues(cursor); },
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, cursor, loadingMore, loadIssues]);
 
   return (
     <div className="p-6">
@@ -88,13 +103,9 @@ function IssuesContent() {
             </Card>
           ))}
           {hasMore && (
-            <Button
-              variant="ghost"
-              className="w-full text-muted-foreground"
-              onClick={() => loadIssues(cursor)}
-            >
-              Load more
-            </Button>
+            <div ref={sentinelRef} className="flex justify-center py-4">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+            </div>
           )}
         </div>
       )}
