@@ -145,15 +145,19 @@ class SlaveClient:
         task_description: str | None,
         model: str,
         callback_url: str,
+        template_definition: dict | None = None,
     ) -> Any:
-        return await self._request("POST", "/api/orchestrate", json={
+        payload: dict[str, Any] = {
             "pipeline_key": pipeline_key,
             "repo_path": repo_path,
             "issue_number": issue_number,
             "task_description": task_description,
             "model": model,
             "callback_url": callback_url,
-        })
+        }
+        if template_definition is not None:
+            payload["template_definition"] = template_definition
+        return await self._request("POST", "/api/orchestrate", json=payload)
 
     async def cancel_pipeline(self, pipeline_key: str) -> Any:
         return await self._request("POST", f"/api/orchestrate/{pipeline_key}/cancel")

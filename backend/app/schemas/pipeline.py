@@ -6,6 +6,7 @@ class CreatePipelineRequest(BaseModel):
     issue_number: int | None = None
     task_description: str | None = None
     model: str = "claude-opus-4-6"
+    template_id: int | None = None
 
 
 class PipelineCallbackRequest(BaseModel):
