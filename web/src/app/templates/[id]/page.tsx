@@ -24,6 +24,7 @@ import { StartNode } from "@/components/builder/start-node";
 import { EndNode } from "@/components/builder/end-node";
 import { AgentNode } from "@/components/builder/agent-node";
 import { ConditionNode } from "@/components/builder/condition-node";
+import { ConfigPanel } from "@/components/builder/config-panel";
 import type { PipelineTemplate } from "@/store/templates";
 
 const nodeTypes = {
@@ -42,6 +43,7 @@ function BuilderContent() {
   const [template, setTemplate] = useState<PipelineTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -67,6 +69,25 @@ function BuilderContent() {
     },
     [setEdges],
   );
+
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    setSelectedNodeId(node.id);
+  }, []);
+
+  const onPaneClick = useCallback(() => {
+    setSelectedNodeId(null);
+  }, []);
+
+  const handleNodeUpdate = useCallback(
+    (id: string, data: Record<string, unknown>) => {
+      setNodes((nds) =>
+        nds.map((n) => (n.id === id ? { ...n, data } : n)),
+      );
+    },
+    [setNodes],
+  );
+
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
 
   const handleSave = useCallback(async () => {
     if (!template) return;
@@ -114,21 +135,32 @@ function BuilderContent() {
         </Button>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          fitView
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background />
-          <Controls />
-        </ReactFlow>
+      {/* Canvas + Config Panel */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={onNodeClick}
+            onPaneClick={onPaneClick}
+            fitView
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background />
+            <Controls />
+          </ReactFlow>
+        </div>
+        {selectedNode && (
+          <ConfigPanel
+            node={selectedNode}
+            onUpdate={handleNodeUpdate}
+            onClose={() => setSelectedNodeId(null)}
+          />
+        )}
       </div>
     </div>
   );
