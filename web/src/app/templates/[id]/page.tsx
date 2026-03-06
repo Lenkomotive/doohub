@@ -25,7 +25,10 @@ import { EndNode } from "@/components/builder/end-node";
 import { AgentNode } from "@/components/builder/agent-node";
 import { ConditionNode } from "@/components/builder/condition-node";
 import { ConfigPanel } from "@/components/builder/config-panel";
+import { Toolbar } from "@/components/builder/toolbar";
 import type { PipelineTemplate } from "@/store/templates";
+
+let nodeIdCounter = 0;
 
 const nodeTypes = {
   start: StartNode,
@@ -87,6 +90,54 @@ function BuilderContent() {
     [setNodes],
   );
 
+  const handleAddNode = useCallback(
+    (type: string) => {
+      const id = `${type}_${++nodeIdCounter}`;
+      const defaults: Record<string, Record<string, unknown>> = {
+        claude_agent: {
+          id,
+          type,
+          name: "New Agent",
+          prompt_template: "",
+          model: null,
+          timeout: 600,
+          retry: { max_attempts: 1 },
+          outputs: [],
+          extract: {},
+          status_label: "",
+        },
+        condition: {
+          id,
+          type,
+          name: "New Condition",
+          condition_field: "",
+          branches: {},
+          default_branch: "",
+          max_iterations: null,
+        },
+        end: { id, type, name: "End", status: "done" },
+      };
+      const newNode: Node = {
+        id,
+        type,
+        position: { x: 250, y: 250 },
+        data: defaults[type] || { id, type },
+      };
+      setNodes((nds) => [...nds, newNode]);
+      setSelectedNodeId(id);
+    },
+    [setNodes],
+  );
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!selectedNodeId) return;
+    setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
+    setEdges((eds) =>
+      eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId),
+    );
+    setSelectedNodeId(null);
+  }, [selectedNodeId, setNodes, setEdges]);
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
 
   const handleSave = useCallback(async () => {
@@ -134,6 +185,13 @@ function BuilderContent() {
           Save
         </Button>
       </div>
+
+      {/* Toolbar */}
+      <Toolbar
+        onAddNode={handleAddNode}
+        onDeleteSelected={handleDeleteSelected}
+        hasSelection={selectedNodeId !== null}
+      />
 
       {/* Canvas + Config Panel */}
       <div className="flex flex-1 overflow-hidden">
