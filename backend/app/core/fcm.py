@@ -17,7 +17,11 @@ else:
 
 
 def send_push(fcm_token: str, title: str, body: str, data: dict | None = None) -> None:
-    if not _initialized or not fcm_token:
+    if not _initialized:
+        logger.warning("send_push skipped: Firebase not initialized")
+        return
+    if not fcm_token:
+        logger.warning("send_push skipped: no FCM token")
         return
     try:
         message = messaging.Message(
@@ -25,6 +29,7 @@ def send_push(fcm_token: str, title: str, body: str, data: dict | None = None) -
             notification=messaging.Notification(title=title, body=body),
             data=data or {},
         )
-        messaging.send(message)
+        resp = messaging.send(message)
+        logger.info("Push sent successfully: %s", resp)
     except Exception:
         logger.exception("Failed to send push notification")
