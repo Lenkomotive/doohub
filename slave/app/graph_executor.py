@@ -474,6 +474,11 @@ async def execute_graph(
             current_id = result
 
         elif node_type == "start":
+            await callback({
+                "pipeline_key": key,
+                "status": status_label or "running",
+                "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso),
+            })
             current_id = _get_next_node(node, edge_map)
 
         else:
