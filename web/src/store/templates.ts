@@ -15,10 +15,24 @@ export interface PipelineTemplate {
   updated_at: string;
 }
 
+interface CreateTemplateBody {
+  name: string;
+  description?: string | null;
+  definition: PipelineTemplate["definition"];
+}
+
+interface UpdateTemplateBody {
+  name?: string;
+  description?: string | null;
+  definition?: PipelineTemplate["definition"];
+}
+
 interface TemplatesState {
   templates: PipelineTemplate[];
   isLoading: boolean;
   fetchTemplates: () => Promise<void>;
+  createTemplate: (body: CreateTemplateBody) => Promise<PipelineTemplate | null>;
+  updateTemplate: (id: number, body: UpdateTemplateBody) => Promise<PipelineTemplate | null>;
   deleteTemplate: (id: number) => Promise<boolean>;
 }
 
@@ -35,6 +49,34 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
     } else {
       set({ isLoading: false });
     }
+  },
+
+  createTemplate: async (body) => {
+    const res = await apiFetch("/pipeline-templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const template = await res.json();
+      set((state) => ({ templates: [template, ...state.templates] }));
+      return template;
+    }
+    return null;
+  },
+
+  updateTemplate: async (id, body) => {
+    const res = await apiFetch(`/pipeline-templates/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      set((state) => ({
+        templates: state.templates.map((t) => (t.id === id ? updated : t)),
+      }));
+      return updated;
+    }
+    return null;
   },
 
   deleteTemplate: async (id) => {
