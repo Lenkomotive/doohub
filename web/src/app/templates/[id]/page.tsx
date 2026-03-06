@@ -20,7 +20,18 @@ import { Button } from "@/components/ui/button";
 import { useTemplatesStore } from "@/store/templates";
 import { apiFetch } from "@/lib/api";
 import { definitionToFlow, flowToDefinition } from "@/lib/template-flow";
+import { StartNode } from "@/components/builder/start-node";
+import { EndNode } from "@/components/builder/end-node";
+import { AgentNode } from "@/components/builder/agent-node";
+import { ConditionNode } from "@/components/builder/condition-node";
 import type { PipelineTemplate } from "@/store/templates";
+
+const nodeTypes = {
+  start: StartNode,
+  end: EndNode,
+  claude_agent: AgentNode,
+  condition: ConditionNode,
+};
 
 function BuilderContent() {
   const params = useParams();
@@ -108,6 +119,7 @@ function BuilderContent() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
+          nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
