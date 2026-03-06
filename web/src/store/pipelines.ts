@@ -30,6 +30,10 @@ export interface Pipeline {
   model: string;
   total_cost_usd: number;
   step_logs: StepLog[];
+  current_node_id: string | null;
+  template_id: number | null;
+  template_definition: Record<string, unknown> | null;
+  completed_node_ids: string[];
   created_at: string;
   updated_at: string;
 }
@@ -87,7 +91,11 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
     const res = await apiFetch("/pipelines");
     if (res.ok) {
       const data = await res.json();
-      set({ pipelines: data.pipelines, total: data.total, isLoading: false });
+      const pipelines = (data.pipelines as Pipeline[]).map((p) => ({
+        ...p,
+        completed_node_ids: p.completed_node_ids || [],
+      }));
+      set({ pipelines, total: data.total, isLoading: false });
     } else {
       set({ isLoading: false });
     }
@@ -199,29 +207,44 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
 
     const conn = connectSSE("/pipelines/events", (event, data) => {
       if (event === "pipeline") {
-        const update = data as { pipeline_key: string; status: string; pr_url?: string; error?: string; step?: StepLog };
+        const update = data as { pipeline_key: string; status: string; pr_url?: string; error?: string; step?: StepLog; current_node_id?: string | null };
         set((state) => {
           const idx = state.pipelines.findIndex((p) => p.pipeline_key === update.pipeline_key);
           if (idx >= 0) {
             const pipelines = [...state.pipelines];
-            const pipeline = { ...pipelines[idx] };
-            pipeline.status = update.status;
-            if (update.pr_url !== undefined) pipeline.pr_url = update.pr_url;
-            if (update.error !== undefined) pipeline.error = update.error;
+            const prev = pipelines[idx];
 
-            // Update step_logs from SSE step data
-            if (update.step) {
-              const logs = [...(pipeline.step_logs || [])];
-              const existingIdx = logs.findIndex((s) => s.node_id === update.step!.node_id);
-              if (existingIdx >= 0 && update.step.status !== "running") {
-                logs[existingIdx] = update.step;
-              } else if (existingIdx < 0) {
-                logs.push(update.step);
-              }
-              pipeline.step_logs = logs;
+            // Track completed nodes: when current_node_id changes, the previous node is done
+            let completedNodeIds = prev.completed_node_ids || [];
+            if (
+              update.current_node_id !== undefined &&
+              prev.current_node_id &&
+              prev.current_node_id !== update.current_node_id &&
+              !completedNodeIds.includes(prev.current_node_id)
+            ) {
+              completedNodeIds = [...completedNodeIds, prev.current_node_id];
             }
 
-            pipelines[idx] = pipeline;
+            // Update step_logs from SSE step data
+            let stepLogs = [...(prev.step_logs || [])];
+            if (update.step) {
+              const existingIdx = stepLogs.findIndex((s) => s.node_id === update.step!.node_id);
+              if (existingIdx >= 0 && update.step.status !== "running") {
+                stepLogs[existingIdx] = update.step;
+              } else if (existingIdx < 0) {
+                stepLogs.push(update.step);
+              }
+            }
+
+            pipelines[idx] = {
+              ...prev,
+              status: update.status,
+              step_logs: stepLogs,
+              completed_node_ids: completedNodeIds,
+              ...(update.pr_url !== undefined && { pr_url: update.pr_url }),
+              ...(update.error !== undefined && { error: update.error }),
+              ...(update.current_node_id !== undefined && { current_node_id: update.current_node_id }),
+            };
             return { pipelines };
           }
           // Unknown pipeline, refetch

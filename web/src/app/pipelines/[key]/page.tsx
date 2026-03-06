@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { AppShell } from "@/components/app-shell";
 import { usePipelinesStore, isActive } from "@/store/pipelines";
 import type { Pipeline, StepLog } from "@/store/pipelines";
+import { PipelineGraph } from "@/components/pipeline-graph";
 
 const stepNodeIcon: Record<string, React.ElementType> = {
   start: Play,
@@ -276,6 +277,20 @@ function PipelineDetail() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Live Graph */}
+      {pipeline.template_definition && (
+        <Card className="mb-4 border-border/50 bg-card/50 overflow-hidden">
+          <CardContent className="p-0 h-80">
+            <PipelineGraph
+              definition={pipeline.template_definition}
+              currentNodeId={pipeline.current_node_id}
+              completedNodeIds={pipeline.completed_node_ids ?? []}
+              pipelineStatus={pipeline.status}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Error */}
       {pipeline.error && (

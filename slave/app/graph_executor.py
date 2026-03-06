@@ -303,6 +303,7 @@ async def execute_graph(
     await callback({
         "pipeline_key": key,
         "status": "starting",
+        "current_node_id": None,
         "step_log": f"Pipeline starting ({total_nodes} nodes in template)",
     })
 
@@ -336,6 +337,7 @@ async def execute_graph(
             await callback({
                 "pipeline_key": key,
                 "status": "done",
+                "current_node_id": current_id,
                 "cost_usd": ctx.get("cost_usd", 0),
                 "step_log": f"Pipeline done: {node_name}" + (f" — {result_msg}" if result_msg else ""),
                 "step": _make_step(node, "completed", pipeline_start, output=result_msg or None),
@@ -359,6 +361,7 @@ async def execute_graph(
                 await callback({
                     "pipeline_key": key,
                     "status": node.get("status_label", "failed"),
+                    "current_node_id": current_id,
                     "cost_usd": ctx.get("cost_usd", 0),
                     "step_log": f"Failed: {node_name}" + (f" — {reason}" if reason else "") + f", continuing to {next_id}",
                     "step": fail_step,
@@ -369,6 +372,7 @@ async def execute_graph(
             await callback({
                 "pipeline_key": key,
                 "status": "failed",
+                "current_node_id": current_id,
                 "error": reason or f"Pipeline failed at: {node_name}",
                 "cost_usd": ctx.get("cost_usd", 0),
                 "step_log": f"Pipeline failed: {node_name}" + (f" — {reason}" if reason else ""),
@@ -386,6 +390,7 @@ async def execute_graph(
         await callback({
             "pipeline_key": key,
             "status": status_label or "running",
+            "current_node_id": current_id,
             "step_log": f"[{visited_count}/{total_nodes}] Starting: {node_name}",
             "step": _make_step(node, "running", started_at_iso=started_at_iso),
         })
@@ -404,6 +409,7 @@ async def execute_graph(
                 await callback({
                     "pipeline_key": key,
                     "status": "failed",
+                    "current_node_id": current_id,
                     "error": f"Agent '{node_name}' failed: {agent_error}",
                     "cost_usd": ctx.get("cost_usd", 0),
                     "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error=agent_error),
@@ -444,6 +450,7 @@ async def execute_graph(
             await callback({
                 "pipeline_key": key,
                 "status": status_label or "running",
+                "current_node_id": current_id,
                 "cost_usd": ctx.get("cost_usd", 0),
                 "step_log": f"[{visited_count}/{total_nodes}] {node_name} completed in {node_duration:.1f}s",
                 "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso, output=output_summary),
@@ -460,6 +467,7 @@ async def execute_graph(
                 await callback({
                     "pipeline_key": key,
                     "status": "failed",
+                    "current_node_id": current_id,
                     "error": f"Condition '{node_name}' has no valid branch",
                     "cost_usd": ctx.get("cost_usd", 0),
                 })
@@ -470,6 +478,7 @@ async def execute_graph(
             await callback({
                 "pipeline_key": key,
                 "status": status_label or "running",
+                "current_node_id": current_id,
                 "step_log": f"[{visited_count}/{total_nodes}] {node_name}: {field}={value} → {result}",
                 "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso, output=f"{field}={value} → {result}"),
             })
@@ -492,6 +501,7 @@ async def execute_graph(
     await callback({
         "pipeline_key": key,
         "status": "failed",
+        "current_node_id": None,
         "error": "Pipeline ended without reaching an end node",
         "cost_usd": ctx.get("cost_usd", 0),
     })
