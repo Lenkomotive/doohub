@@ -107,20 +107,12 @@ function ChatView() {
     };
     setMessages((prev) => [...prev, optimisticMsg]);
 
-    let res: Response;
-    if (filesToSend.length > 0) {
-      const formData = new FormData();
-      formData.append("content", message);
-      for (const file of filesToSend) {
-        formData.append("files", file);
-      }
-      res = await apiUpload(`/sessions/${sessionKey}/messages`, formData);
-    } else {
-      res = await apiFetch(`/sessions/${sessionKey}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content: message }),
-      });
+    const formData = new FormData();
+    formData.append("content", message);
+    for (const file of filesToSend) {
+      formData.append("files", file);
     }
+    const res = await apiUpload(`/sessions/${sessionKey}/messages`, formData);
 
     if (res.ok) {
       const data = await res.json();

@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   MessageSquare,
   FolderGit2,
-  CircleDot,
   LogOut,
   Bot,
   Settings,
@@ -21,7 +20,6 @@ const navItems = [
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
   { href: "/repos", label: "Repos", icon: FolderGit2 },
   { href: "/templates", label: "Templates", icon: Workflow },
-  { href: "/issues", label: "Issues", icon: CircleDot, disabled: true },
 ];
 
 export function Sidebar() {
