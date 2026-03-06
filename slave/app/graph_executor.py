@@ -147,6 +147,7 @@ async def _handle_claude_agent(node: dict, ctx: dict) -> str | None:
                 await asyncio.sleep(2 ** attempt)
                 continue
             logger.error("Pipeline %s: %s failed after %d attempts: %s", key, node_id, max_attempts, error_msg)
+            ctx[f"_error_{node_id}"] = error_msg
             return None
 
         # Track session and cost
@@ -398,13 +399,14 @@ async def execute_graph(
         if node_type == "claude_agent":
             if result is None:
                 # Agent failed
-                logger.error("Pipeline %s: %s agent returned no result", key, current_id)
+                agent_error = ctx.get(f"_error_{current_id}", "Agent returned no result")
+                logger.error("Pipeline %s: %s agent failed: %s", key, current_id, agent_error)
                 await callback({
                     "pipeline_key": key,
                     "status": "failed",
-                    "error": f"Agent '{node_name}' failed",
+                    "error": f"Agent '{node_name}' failed: {agent_error}",
                     "cost_usd": ctx.get("cost_usd", 0),
-                    "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error="Agent returned no result"),
+                    "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error=agent_error),
                 })
                 return
 

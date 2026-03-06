@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Markdown from "react-markdown";
 import {
   ArrowLeft,
   ExternalLink,
@@ -62,6 +63,29 @@ const statusVariant: Record<string, "default" | "secondary" | "destructive" | "o
   failed: "destructive",
   cancelled: "secondary",
 };
+
+function StepOutput({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > 120;
+  if (!isLong) {
+    return <p className="text-xs text-muted-foreground mt-1 truncate">{text}</p>;
+  }
+  return (
+    <div className="mt-1">
+      <button
+        className="text-xs text-muted-foreground hover:text-foreground/70 truncate block w-full text-left"
+        onClick={() => setExpanded(!expanded)}
+      >
+        {expanded ? "▾ collapse" : text}
+      </button>
+      {expanded && (
+        <div className="mt-2 text-xs prose prose-sm prose-invert max-w-none rounded-md bg-muted/50 p-3 max-h-96 overflow-y-auto">
+          <Markdown>{text}</Markdown>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PipelineDetail() {
   const params = useParams();
@@ -332,7 +356,7 @@ function PipelineDetail() {
                         )}
                       </div>
                       {step.output && (
-                        <p className="text-xs text-muted-foreground mt-1 truncate">{step.output}</p>
+                        <StepOutput text={step.output} />
                       )}
                       {step.error && (
                         <p className="text-xs text-destructive mt-1">{step.error}</p>

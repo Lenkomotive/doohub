@@ -290,6 +290,9 @@ async def _run_graph_pipeline(ctx: dict) -> None:
 
         await execute_graph(definition, ctx, cb)
 
+        # Cleanup worktree on success
+        await _cleanup_worktree(repo_path, worktree_path)
+
     except asyncio.CancelledError:
         logger.info("Pipeline %s cancelled — cleaning up", key)
         await _cancel_cleanup(ctx)
@@ -541,6 +544,7 @@ def start(
         "issue_number": issue_number,
         "issue_title": task_description or "",
         "issue_body": task_description or "",
+        "task_description": task_description or "",
         "model": model,
         "callback_url": callback_url,
         "api_key": api_key,
