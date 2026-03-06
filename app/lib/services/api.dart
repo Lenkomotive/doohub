@@ -136,16 +136,12 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> createSession({
-    required String name,
-    String model = 'sonnet',
+    String model = 'opus',
     required String projectPath,
-    bool interactive = false,
   }) async {
     final res = await _dio.post('/sessions', data: {
-      'name': name,
       'model': model,
       'project_path': projectPath,
-      'interactive': interactive,
     });
     return res.data;
   }

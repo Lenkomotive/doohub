@@ -135,12 +135,10 @@ class SessionsCubit extends Cubit<SessionsState> {
   }
 
   Future<String> createSession({
-    required String name,
     required String projectPath,
-    String model = 'sonnet',
+    String model = 'opus',
   }) async {
     final data = await api.createSession(
-      name: name,
       projectPath: projectPath,
       model: model,
     );

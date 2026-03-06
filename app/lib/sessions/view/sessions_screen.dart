@@ -125,15 +125,6 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   bool _loading = false;
   bool _loadingRepos = true;
 
-  String _nextName() {
-    final existing = widget.cubit.state.sessions.map((s) => s.name).toSet();
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    for (final c in chars.split('')) {
-      if (!existing.contains(c)) return c;
-    }
-    return chars[existing.length % chars.length];
-  }
-
   @override
   void initState() {
     super.initState();
@@ -153,7 +144,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   Future<void> _submit() async {
     setState(() => _loading = true);
     try {
-      final key = await widget.cubit.createSession(name: _nextName(), projectPath: _selectedProject, model: _selectedModel);
+      final key = await widget.cubit.createSession(projectPath: _selectedProject, model: _selectedModel);
       if (mounted) {
         Navigator.of(context).pop();
         widget.onCreated(key);
