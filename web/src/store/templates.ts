@@ -76,7 +76,12 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
       }));
       return updated;
     }
-    return null;
+    let detail = `Save failed (${res.status})`;
+    try {
+      const err = await res.json();
+      if (err.detail) detail = typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail);
+    } catch {}
+    throw new Error(detail);
   },
 
   deleteTemplate: async (id) => {

@@ -99,9 +99,10 @@ async def pipeline_sse(
     user: User = Depends(get_current_user),
     db: DBSession = Depends(get_db),
 ):
+    user_id = user.id
     user_keys = {
         p.pipeline_key
-        for p in db.query(Pipeline).filter(Pipeline.user_id == user.id).all()
+        for p in db.query(Pipeline).filter(Pipeline.user_id == user_id).all()
     }
 
     async def generate():
@@ -113,7 +114,15 @@ async def pipeline_sse(
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
                     continue
-                if event.get("pipeline_key") in user_keys:
+                pk = event.get("pipeline_key")
+                if pk not in user_keys:
+                    # Check if this is a newly created pipeline for this user
+                    p = db.query(Pipeline).filter(
+                        Pipeline.pipeline_key == pk, Pipeline.user_id == user_id
+                    ).first()
+                    if p:
+                        user_keys.add(pk)
+                if pk in user_keys:
                     yield f"event: pipeline\ndata: {json.dumps(event)}\n\n"
         except asyncio.CancelledError:
             pass

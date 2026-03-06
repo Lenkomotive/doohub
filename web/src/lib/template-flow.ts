@@ -8,14 +8,31 @@ export function definitionToFlow(definition: PipelineTemplate["definition"]): {
   nodes: Node[];
   edges: Edge[];
 } {
-  const nodes: Node[] = (definition.nodes || []).map((n) => ({
-    id: n.id,
-    type: n.type as string,
-    position: (n.position as { x: number; y: number }) || { x: 0, y: 0 },
-    data: { ...n },
-  }));
+  const defEdges = definition.edges || [];
 
-  const edges: Edge[] = (definition.edges || []).map((e, i) => ({
+  // Build source → targets map so node data stays in sync with edges
+  const edgesBySource: Record<string, string[]> = {};
+  for (const e of defEdges) {
+    (edgesBySource[e.from] ||= []).push(e.to);
+  }
+
+  const nodes: Node[] = (definition.nodes || []).map((n) => {
+    const data = { ...n };
+    // Populate targets from edges so syncEdges in the builder doesn't wipe them
+    if (["start", "claude_agent", "end", "failed"].includes(n.type)) {
+      if (!Array.isArray(data.targets) || data.targets.length === 0) {
+        data.targets = edgesBySource[n.id] || [];
+      }
+    }
+    return {
+      id: n.id,
+      type: n.type as string,
+      position: (n.position as { x: number; y: number }) || { x: 0, y: 0 },
+      data,
+    };
+  });
+
+  const edges: Edge[] = defEdges.map((e) => ({
     id: `e-${e.from}-${e.to}`,
     source: e.from,
     target: e.to,

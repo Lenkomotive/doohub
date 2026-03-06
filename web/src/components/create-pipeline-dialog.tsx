@@ -138,21 +138,25 @@ export function CreatePipelineDialog() {
 
     setLoading(true);
 
-    const useTemplate = templateId && templateId !== "__none__";
-    for (const issueNum of selectedIssues) {
-      const issue = issues.find((i) => i.number === issueNum);
-      await createPipeline({
-        repo_path: repoPath,
-        issue_number: issueNum,
-        task_description: issue?.title || undefined,
-        ...(useTemplate
-          ? { template_id: Number(templateId) }
-          : { model }),
-      });
+    try {
+      const useTemplate = templateId && templateId !== "__none__";
+      for (const issueNum of selectedIssues) {
+        const issue = issues.find((i) => i.number === issueNum);
+        await createPipeline({
+          repo_path: repoPath,
+          issue_number: issueNum,
+          task_description: issue?.title || undefined,
+          ...(useTemplate
+            ? { template_id: Number(templateId) }
+            : { model }),
+        });
+      }
+      setOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create pipeline");
     }
 
     setLoading(false);
-    setOpen(false);
   };
 
   return (

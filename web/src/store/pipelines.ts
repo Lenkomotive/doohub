@@ -89,7 +89,12 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
       await get().fetchPipelines();
       return true;
     }
-    return false;
+    let detail = `Failed to create pipeline (${res.status})`;
+    try {
+      const err = await res.json();
+      if (err.detail) detail = typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail);
+    } catch {}
+    throw new Error(detail);
   },
 
   cancelPipeline: async (key) => {

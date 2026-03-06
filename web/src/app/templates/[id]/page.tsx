@@ -62,6 +62,7 @@ function BuilderContent() {
   const [template, setTemplate] = useState<PipelineTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -206,11 +207,18 @@ function BuilderContent() {
   const handleSave = useCallback(async () => {
     if (!template) return;
     setSaving(true);
-    const definition = flowToDefinition(nodes, edges, {
-      version: template.definition.version,
-      name: template.definition.name,
-    });
-    await updateTemplate(templateId, { definition });
+    try {
+      const definition = flowToDefinition(nodes, edges, {
+        version: template.definition.version,
+        name: template.definition.name,
+      });
+      await updateTemplate(templateId, { definition });
+      setError("");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Save failed";
+      setError(msg);
+      setTimeout(() => setError(""), 5000);
+    }
     setSaving(false);
   }, [template, nodes, edges, templateId, updateTemplate]);
 
@@ -256,6 +264,7 @@ function BuilderContent() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h2 className="text-sm font-medium">{template.name}</h2>
+          {error && <span className="text-xs text-destructive">{error}</span>}
         </div>
         <Button size="sm" onClick={handleSave} disabled={saving}>
           {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1 h-3.5 w-3.5" />}
