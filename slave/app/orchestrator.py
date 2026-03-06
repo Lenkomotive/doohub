@@ -15,6 +15,7 @@ import httpx
 from app import claude_runner
 from app.agent_prompts import developer_prompt, planner_prompt, reviewer_prompt
 from app.config import settings
+from app.graph_executor import execute_graph
 
 logger = logging.getLogger(__name__)
 
@@ -241,8 +242,74 @@ async def _run_reviewer(ctx: dict, worktree_path: str) -> str | None:
 # ── Pipeline State Machine ───────────────────────────────────────────────────
 
 
+async def _run_graph_pipeline(ctx: dict) -> None:
+    """Execute a pipeline using the graph executor with a template definition."""
+    key = ctx["pipeline_key"]
+    cb_url = ctx["callback_url"]
+    api_key = ctx["api_key"]
+    repo_path = ctx["repo_path"]
+    definition = ctx["template_definition"]
+
+    logger.info("Pipeline %s: using graph executor (template: %s)", key, definition.get("name", "unnamed"))
+
+    # Fetch issue details if needed
+    if ctx.get("issue_number") and not ctx.get("issue_body"):
+        code, out = await _run_gh(
+            repo_path, "issue", "view", str(ctx["issue_number"]),
+            "--json", "title,body",
+        )
+        if code == 0 and out:
+            try:
+                data = json.loads(out)
+                ctx["issue_title"] = data.get("title", ctx.get("issue_title", ""))
+                ctx["issue_body"] = data.get("body", "")
+            except json.JSONDecodeError:
+                pass
+
+    # Build branch name
+    if ctx.get("issue_number"):
+        title_slug = _slugify(ctx.get("issue_title", "task"))
+        ctx["branch"] = f"doohub/issue-{ctx['issue_number']}-{title_slug}"
+    else:
+        ctx["branch"] = f"doohub/pipeline-{key}"
+
+    try:
+        # Setup worktree
+        worktree_path = await _ensure_worktree(repo_path, key, ctx["branch"])
+        if not worktree_path:
+            await _callback(cb_url, api_key, {
+                "pipeline_key": key, "status": "failed", "error": "Failed to create worktree",
+            })
+            return
+
+        ctx["worktree_path"] = worktree_path
+
+        # Run the graph
+        async def cb(data: dict) -> None:
+            await _callback(cb_url, api_key, data)
+
+        await execute_graph(definition, ctx, cb)
+
+    except asyncio.CancelledError:
+        logger.info("Pipeline %s cancelled — cleaning up", key)
+        await _cancel_cleanup(ctx)
+        await _callback(cb_url, api_key, {
+            "pipeline_key": key, "status": "cancelled",
+        })
+        raise
+    except Exception as e:
+        logger.error("Pipeline %s error: %s", key, e, exc_info=True)
+        slug = re.sub(r"[^a-z0-9]+", "-", key.lower()).strip("-")
+        await _cleanup_worktree(repo_path, str(WORKTREE_DIR / slug))
+        await _callback(cb_url, api_key, {
+            "pipeline_key": key, "status": "failed", "error": str(e),
+        })
+    finally:
+        _tasks.pop(key, None)
+
+
 async def _run_pipeline(ctx: dict) -> None:
-    """Execute the full plan → develop → review pipeline."""
+    """Execute the full plan → develop → review pipeline (legacy path)."""
     key = ctx["pipeline_key"]
     cb_url = ctx["callback_url"]
     api_key = ctx["api_key"]
@@ -463,6 +530,7 @@ def start(
     model: str,
     callback_url: str,
     api_key: str,
+    template_definition: dict | None = None,
 ) -> None:
     if pipeline_key in _tasks:
         raise ValueError(f"Pipeline {pipeline_key} is already running")
@@ -478,7 +546,16 @@ def start(
         "api_key": api_key,
         "cost_usd": 0,
     }
-    task = asyncio.create_task(_run_pipeline(ctx), name=f"pipeline-{pipeline_key}")
+
+    if template_definition:
+        ctx["template_definition"] = template_definition
+        logger.info("Pipeline %s: starting with template '%s'", pipeline_key, template_definition.get("name", "unnamed"))
+        runner = _run_graph_pipeline(ctx)
+    else:
+        logger.info("Pipeline %s: starting with legacy orchestrator", pipeline_key)
+        runner = _run_pipeline(ctx)
+
+    task = asyncio.create_task(runner, name=f"pipeline-{pipeline_key}")
     _tasks[pipeline_key] = task
 
 

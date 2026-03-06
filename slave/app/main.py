@@ -2,11 +2,12 @@ import logging
 
 from fastapi import FastAPI
 
+from app.config import settings
 from app.routers import orchestrate, repos, run
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    level=logging.INFO,
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
 )
 
 app = FastAPI(title="DooHub Slave", version="1.0.0")
