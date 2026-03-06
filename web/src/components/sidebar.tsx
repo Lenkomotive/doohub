@@ -44,14 +44,12 @@ export function Sidebar() {
           return (
             <Link
               key={item.href}
-              href={item.disabled ? "#" : item.href}
-              title={item.label + (item.disabled ? " (coming soon)" : "")}
+              href={item.href}
+              title={item.label}
               className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
-                item.disabled
-                  ? "cursor-not-allowed text-muted-foreground/30"
-                  : isActive
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
+                isActive
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
               }`}
             >
               <item.icon className="h-4 w-4" />
