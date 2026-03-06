@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   addEdge,
   type Connection,
   type Node,
@@ -20,19 +22,32 @@ import { Button } from "@/components/ui/button";
 import { useTemplatesStore } from "@/store/templates";
 import { apiFetch } from "@/lib/api";
 import { definitionToFlow, flowToDefinition } from "@/lib/template-flow";
+import { autoLayout } from "@/lib/auto-layout";
 import { StartNode } from "@/components/builder/start-node";
 import { EndNode } from "@/components/builder/end-node";
+import { FailedNode } from "@/components/builder/failed-node";
 import { AgentNode } from "@/components/builder/agent-node";
 import { ConditionNode } from "@/components/builder/condition-node";
 import { ConfigPanel } from "@/components/builder/config-panel";
 import { Toolbar } from "@/components/builder/toolbar";
 import type { PipelineTemplate } from "@/store/templates";
 
-let nodeIdCounter = 0;
+function nextNodeId(type: string, nodes: Node[]): string {
+  const prefix = `${type}_`;
+  let max = 0;
+  for (const n of nodes) {
+    if (n.id.startsWith(prefix)) {
+      const num = parseInt(n.id.slice(prefix.length), 10);
+      if (num > max) max = num;
+    }
+  }
+  return `${prefix}${max + 1}`;
+}
 
 const nodeTypes = {
   start: StartNode,
   end: EndNode,
+  failed: FailedNode,
   claude_agent: AgentNode,
   condition: ConditionNode,
 };
@@ -41,6 +56,7 @@ function BuilderContent() {
   const params = useParams();
   const router = useRouter();
   const { updateTemplate } = useTemplatesStore();
+  const { screenToFlowPosition, fitView } = useReactFlow();
   const templateId = Number(params.id);
 
   const [template, setTemplate] = useState<PipelineTemplate | null>(null);
@@ -86,13 +102,39 @@ function BuilderContent() {
       setNodes((nds) =>
         nds.map((n) => (n.id === id ? { ...n, data } : n)),
       );
+
+      // Sync edges from node data
+      const syncEdges = (targets: { target: string; label?: string }[]) => {
+        setEdges((eds) => {
+          const otherEdges = eds.filter((e) => e.source !== id);
+          const newEdges = targets
+            .filter((t) => t.target)
+            .map((t) => ({
+              id: `${id}-${t.target}-${t.label || ""}`,
+              source: id,
+              target: t.target,
+              type: "smoothstep" as const,
+              label: t.label || undefined,
+            }));
+          return [...otherEdges, ...newEdges];
+        });
+      };
+
+      if ((data.type === "start" || data.type === "claude_agent" || data.type === "failed") && Array.isArray(data.targets)) {
+        syncEdges((data.targets as string[]).map((t) => ({ target: t })));
+      }
+
+      if (data.type === "condition" && Array.isArray(data.branches)) {
+        const branches = data.branches as { value: string; target: string }[];
+        syncEdges(branches.map((b) => ({ target: b.target, label: b.value })));
+      }
     },
-    [setNodes],
+    [setNodes, setEdges],
   );
 
   const handleAddNode = useCallback(
     (type: string) => {
-      const id = `${type}_${++nodeIdCounter}`;
+      const id = nextNodeId(type, nodes);
       const defaults: Record<string, Record<string, unknown>> = {
         claude_agent: {
           id,
@@ -113,18 +155,19 @@ function BuilderContent() {
           condition_field: "",
           branches: {},
         },
-        end: { id, type, name: "End", status: "done" },
+        end: { id, type, name: "Done", result_template: "" },
+        failed: { id, type, name: "Failed", reason_template: "", targets: [] },
       };
       const newNode: Node = {
         id,
         type,
-        position: { x: 250, y: 250 },
+        position: screenToFlowPosition({ x: 200, y: 300 }),
         data: defaults[type] || { id, type },
       };
       setNodes((nds) => [...nds, newNode]);
       setSelectedNodeId(id);
     },
-    [setNodes],
+    [setNodes, nodes],
   );
 
   const handleDeleteSelected = useCallback(() => {
@@ -135,6 +178,28 @@ function BuilderContent() {
     );
     setSelectedNodeId(null);
   }, [selectedNodeId, setNodes, setEdges]);
+
+  const handleAutoLayout = useCallback(() => {
+    const laid = autoLayout(nodes, edges);
+    setNodes(laid);
+    setTimeout(() => fitView({ padding: 0.2 }), 50);
+  }, [nodes, edges, setNodes, fitView]);
+
+  const handleExportJson = useCallback(() => {
+    if (!template) return;
+    const definition = flowToDefinition(nodes, edges, {
+      version: template.definition.version,
+      name: template.definition.name,
+    });
+    const json = JSON.stringify(definition, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${template.name.replace(/\s+/g, "_").toLowerCase()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [template, nodes, edges]);
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
 
@@ -148,6 +213,20 @@ function BuilderContent() {
     await updateTemplate(templateId, { definition });
     setSaving(false);
   }, [template, nodes, edges, templateId, updateTemplate]);
+
+  // Autosave 5s after last change
+  const initialLoad = useRef(true);
+  useEffect(() => {
+    if (initialLoad.current) {
+      initialLoad.current = false;
+      return;
+    }
+    if (!template) return;
+    const timer = setTimeout(() => {
+      handleSave();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [nodes, edges, template, handleSave]);
 
   if (loading) {
     return (
@@ -189,6 +268,8 @@ function BuilderContent() {
         nodes={nodes}
         onAddNode={handleAddNode}
         onDeleteSelected={handleDeleteSelected}
+        onAutoLayout={handleAutoLayout}
+        onExportJson={handleExportJson}
         hasSelection={selectedNodeId !== null}
       />
 
@@ -227,7 +308,9 @@ function BuilderContent() {
 export default function BuilderPage() {
   return (
     <AppShell>
-      <BuilderContent />
+      <ReactFlowProvider>
+        <BuilderContent />
+      </ReactFlowProvider>
     </AppShell>
   );
 }

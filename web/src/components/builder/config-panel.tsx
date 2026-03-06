@@ -25,6 +25,7 @@ interface ConfigPanelProps {
   onClose: () => void;
 }
 
+type OutputDef = { name: string; values: string[] };
 type Branch = { value: string; target: string };
 
 function branchesToArray(branches: Record<string, string> | Branch[]): Branch[] {
@@ -69,13 +70,12 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
     .filter((n) => n.type === "claude_agent" && n.id !== node.id)
     .flatMap((n) => {
       const name = (n.data.name as string) || n.id;
-      const outputs = (n.data.outputs as string[]) || [];
-      const extractFields = Object.keys((n.data.extract as Record<string, string>) || {});
-      return [...outputs, ...extractFields].map((v) => ({ source: name, var: v }));
+      const outputs = (n.data.outputs as OutputDef[]) || [];
+      return outputs.filter((o) => o.name).map((o) => ({ source: name, var: o.name }));
     });
 
   return (
-    <div className="flex h-full w-72 flex-col border-l border-border/50 bg-card/30">
+    <div className="flex h-full w-[28rem] flex-col border-l border-border/50 bg-card/30">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
         <span className="text-xs font-medium">Configure: {(data.name as string) || node.id}</span>
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
@@ -83,9 +83,9 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 pb-6 space-y-3">
         {/* Name — all types except start and end */}
-        {nodeType !== "start" && nodeType !== "end" && (
+        {nodeType !== "start" && (
           <Field label="Name">
             <Input
               value={(data.name as string) || ""}
@@ -95,18 +95,46 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
           </Field>
         )}
 
+        {/* Start node */}
+        {nodeType === "start" && (
+          <NextNodes
+            targets={(data.targets as string[]) || []}
+            allNodes={allNodes}
+            currentNodeId={node.id}
+            onUpdate={(targets) => update("targets", targets)}
+          />
+        )}
+
         {/* End node */}
         {nodeType === "end" && (
-          <Field label="Status">
-            <select
-              value={(data.status as string) || "done"}
-              onChange={(e) => update("status", e.target.value)}
-              className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
-            >
-              <option value="done">done</option>
-              <option value="failed">failed</option>
-            </select>
-          </Field>
+          <TemplateField
+            label="Result"
+            placeholder="e.g. {{plan}}"
+            value={(data.result_template as string) || ""}
+            onChange={(v) => update("result_template", v)}
+            pipelineVars={PIPELINE_VARS}
+            agentVars={agentVars}
+          />
+        )}
+
+        {/* Failed node */}
+        {nodeType === "failed" && (
+          <>
+            <TemplateField
+              label="Reason"
+              placeholder="e.g. {{issue_good}}"
+              value={(data.reason_template as string) || ""}
+              onChange={(v) => update("reason_template", v)}
+              pipelineVars={PIPELINE_VARS}
+              agentVars={agentVars}
+            />
+            <NextNodes
+              targets={(data.targets as string[]) || []}
+              allNodes={allNodes}
+              currentNodeId={node.id}
+              onUpdate={(targets) => update("targets", targets)}
+            />
+          </>
         )}
 
         {/* Claude Agent node */}
@@ -198,31 +226,64 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
 
             <Separator />
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label className="text-[10px] text-muted-foreground">Outputs</Label>
-              {((data.outputs as string[]) || []).map((output, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <Input
-                    value={output}
-                    onChange={(e) => {
-                      const outputs = [...((data.outputs as string[]) || [])];
-                      outputs[i] = e.target.value;
-                      update("outputs", outputs);
-                    }}
-                    className="h-7 text-xs flex-1"
-                    placeholder="variable name"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => {
-                      const outputs = ((data.outputs as string[]) || []).filter((_, j) => j !== i);
-                      update("outputs", outputs);
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
+              {((data.outputs as OutputDef[]) || []).map((output, i) => (
+                <div key={i} className="space-y-1 rounded-md border border-border/50 p-2">
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={output.name}
+                      onChange={(e) => {
+                        const outputs = [...((data.outputs as OutputDef[]) || [])];
+                        outputs[i] = { ...outputs[i], name: e.target.value };
+                        update("outputs", outputs);
+                      }}
+                      className="h-7 text-xs flex-1"
+                      placeholder="variable name"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        const outputs = ((data.outputs as OutputDef[]) || []).filter((_, j) => j !== i);
+                        update("outputs", outputs);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {(output.values || []).map((v, vi) => (
+                      <Badge
+                        key={vi}
+                        variant="secondary"
+                        className="text-[9px] px-1.5 py-0 font-mono cursor-pointer hover:bg-destructive/20"
+                        onClick={() => {
+                          const outputs = [...((data.outputs as OutputDef[]) || [])];
+                          outputs[i] = { ...outputs[i], values: output.values.filter((_, j) => j !== vi) };
+                          update("outputs", outputs);
+                        }}
+                      >
+                        {v} <X className="ml-0.5 h-2 w-2" />
+                      </Badge>
+                    ))}
+                    <Input
+                      className="h-6 text-[10px] w-full"
+                      placeholder="+ value (enter to add)"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const val = e.currentTarget.value.trim();
+                          if (!val) return;
+                          const outputs = [...((data.outputs as OutputDef[]) || [])];
+                          outputs[i] = { ...outputs[i], values: [...(output.values || []), val] };
+                          update("outputs", outputs);
+                          e.currentTarget.value = "";
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
               ))}
               <Button
@@ -230,7 +291,7 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
                 size="sm"
                 className="h-7 w-full text-xs"
                 onClick={() => {
-                  const outputs = [...((data.outputs as string[]) || []), ""];
+                  const outputs = [...((data.outputs as OutputDef[]) || []), { name: "", values: [] }];
                   update("outputs", outputs);
                 }}
               >
@@ -238,26 +299,14 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
               </Button>
             </div>
 
-            <Field label="Extract Rules (field:rule per line)">
-              <textarea
-                value={Object.entries((data.extract as Record<string, string>) || {})
-                  .map(([k, v]) => `${k}:${v}`)
-                  .join("\n")}
-                onChange={(e) => {
-                  const extract: Record<string, string> = {};
-                  e.target.value.split("\n").forEach((line) => {
-                    const idx = line.indexOf(":");
-                    if (idx > 0) {
-                      extract[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-                    }
-                  });
-                  update("extract", extract);
-                }}
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs font-mono resize-y"
-                placeholder={"pr_url:regex:https://github\\.com/...\nverdict:keyword:APPROVED|CHANGES_REQUESTED"}
-              />
-            </Field>
+            <Separator />
+
+            <NextNodes
+              targets={(data.targets as string[]) || []}
+              allNodes={allNodes}
+              currentNodeId={node.id}
+              onUpdate={(targets) => update("targets", targets)}
+            />
           </>
         )}
 
@@ -268,19 +317,45 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
             (data.branches as Record<string, string> | Branch[]) || [],
           );
 
+          // Collect all available context variables (pipeline + agent outputs)
+          const allOutputDefs = allNodes
+            .filter((n) => n.type === "claude_agent")
+            .flatMap((n) => (n.data.outputs as OutputDef[]) || [])
+            .filter((o) => o.name?.trim());
+          const agentOutputVars = allOutputDefs.map((o) => o.name);
+          const availableVars = [...PIPELINE_VARS, ...agentOutputVars];
+
+          // Get allowed values for the selected condition field
+          const selectedField = (data.condition_field as string) || "";
+          const selectedOutputDef = allOutputDefs.find((o) => o.name === selectedField);
+          const allowedValues = selectedOutputDef?.values || [];
+
           function updateBranches(updated: Branch[]) {
-            update("branches", branchesToRecord(updated));
+            update("branches", updated);
           }
 
           return (
             <>
-              <Field label="Condition Field">
+              <Field label="Status Label">
                 <Input
+                  value={(data.status_label as string) || ""}
+                  onChange={(e) => update("status_label", e.target.value)}
+                  className="h-7 text-xs"
+                  placeholder="e.g. checking issue"
+                />
+              </Field>
+
+              <Field label="Condition Field">
+                <select
                   value={(data.condition_field as string) || ""}
                   onChange={(e) => update("condition_field", e.target.value)}
-                  className="h-7 text-xs"
-                  placeholder="e.g. verdict"
-                />
+                  className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+                >
+                  <option value="">Select variable…</option>
+                  {availableVars.map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
               </Field>
 
               <Separator />
@@ -289,16 +364,33 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
                 <Label className="text-[10px] text-muted-foreground">Branches</Label>
                 {branches.map((branch, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <Input
-                      value={branch.value}
-                      onChange={(e) => {
-                        const updated = [...branches];
-                        updated[i] = { ...updated[i], value: e.target.value };
-                        updateBranches(updated);
-                      }}
-                      className="h-7 text-xs flex-1"
-                      placeholder="value"
-                    />
+                    {allowedValues.length > 0 ? (
+                      <select
+                        value={branch.value}
+                        onChange={(e) => {
+                          const updated = [...branches];
+                          updated[i] = { ...updated[i], value: e.target.value };
+                          updateBranches(updated);
+                        }}
+                        className="h-7 flex-1 rounded-md border border-input bg-background px-1.5 text-xs"
+                      >
+                        <option value="">select value</option>
+                        {allowedValues.map((v) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Input
+                        value={branch.value}
+                        onChange={(e) => {
+                          const updated = [...branches];
+                          updated[i] = { ...updated[i], value: e.target.value };
+                          updateBranches(updated);
+                        }}
+                        className="h-7 text-xs flex-1"
+                        placeholder="value"
+                      />
+                    )}
                     <select
                       value={branch.target}
                       onChange={(e) => {
@@ -346,11 +438,135 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
   );
 }
 
+function NextNodes({
+  targets,
+  allNodes,
+  currentNodeId,
+  onUpdate,
+}: {
+  targets: string[];
+  allNodes: Node[];
+  currentNodeId: string;
+  onUpdate: (targets: string[]) => void;
+}) {
+  const targetNodes = allNodes.filter((n) => n.id !== currentNodeId);
+  return (
+    <div className="space-y-2">
+      <Label className="text-[10px] text-muted-foreground">Next Nodes</Label>
+      {targets.map((target, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <select
+            value={target}
+            onChange={(e) => {
+              const updated = [...targets];
+              updated[i] = e.target.value;
+              onUpdate(updated);
+            }}
+            className="h-7 flex-1 rounded-md border border-input bg-background px-1.5 text-xs"
+          >
+            <option value="">→ select node</option>
+            {targetNodes.map((n) => (
+              <option key={n.id} value={n.id}>
+                {(n.data.name as string) || n.id}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={() => onUpdate(targets.filter((_, j) => j !== i))}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 w-full text-xs"
+        onClick={() => onUpdate([...targets, ""])}
+      >
+        Add connection
+      </Button>
+    </div>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
       <Label className="text-[10px] text-muted-foreground">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function TemplateField({
+  label,
+  placeholder,
+  value,
+  onChange,
+  pipelineVars,
+  agentVars,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  pipelineVars: string[];
+  agentVars: { source: string; var: string }[];
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  function insert(varName: string) {
+    const ta = ref.current;
+    if (!ta) return;
+    const tag = `{{${varName}}}`;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const updated = value.slice(0, start) + tag + value.slice(end);
+    onChange(updated);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = start + tag.length;
+    });
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[10px] text-muted-foreground">{label}</Label>
+      <div className="flex flex-wrap gap-1">
+        {pipelineVars.map((v) => (
+          <Badge
+            key={v}
+            variant="outline"
+            className="text-[9px] px-1 py-0 font-mono cursor-pointer hover:bg-accent"
+            onClick={() => insert(v)}
+          >
+            {v}
+          </Badge>
+        ))}
+        {agentVars.map((av) => (
+          <Badge
+            key={`${av.source}-${av.var}`}
+            variant="outline"
+            className="text-[9px] px-1 py-0 font-mono cursor-pointer hover:bg-accent"
+            onClick={() => insert(av.var)}
+            title={`from ${av.source}`}
+          >
+            {av.var}
+          </Badge>
+        ))}
+      </div>
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={3}
+        placeholder={placeholder}
+        className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs font-mono resize-y"
+      />
     </div>
   );
 }

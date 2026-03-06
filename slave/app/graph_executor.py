@@ -33,13 +33,41 @@ def resolve_template(template: str, ctx: dict[str, Any]) -> str:
 # ── Output extraction ──────────────────────────────────────────────────────
 
 
-def extract_outputs(text: str, extract_rules: dict[str, str]) -> dict[str, str | None]:
-    """Extract named outputs from agent text using regex or keyword rules.
+def extract_outputs_from_text(text: str, outputs: list[dict]) -> dict[str, str | None]:
+    """Extract named outputs from agent response text.
 
-    Rules format:
-        {"field": "regex:<pattern>"}    — first match of regex
-        {"field": "keyword:A|B|C"}      — first keyword found (case-insensitive)
+    Outputs format (from builder):
+        [{"name": "field_name", "values": ["yes", "no"]}]
+
+    If values is non-empty, searches for one of the allowed values (keyword match).
+    If values is empty, stores the full text as the output value.
     """
+    results: dict[str, str | None] = {}
+    upper_text = text.upper()
+
+    for output in outputs:
+        name = output.get("name", "")
+        if not name:
+            continue
+        values = output.get("values", [])
+
+        if values:
+            # Keyword match: find which value appears in the text
+            found = None
+            for v in values:
+                if v.strip().upper() in upper_text:
+                    found = v.strip()
+                    break
+            results[name] = found
+        else:
+            # No constrained values: store full text
+            results[name] = text
+
+    return results
+
+
+def extract_outputs_legacy(text: str, extract_rules: dict[str, str]) -> dict[str, str | None]:
+    """Legacy extract rules format: {"field": "regex:<pattern>"} or {"field": "keyword:A|B|C"}."""
     results: dict[str, str | None] = {}
 
     for field, rule in extract_rules.items():
@@ -72,7 +100,18 @@ async def _handle_start(node: dict, ctx: dict) -> str | None:
 
 
 async def _handle_end(node: dict, ctx: dict) -> str | None:
-    """End node — terminal, returns the end status."""
+    """End node — terminal success. Resolves result_template if present."""
+    result_template = node.get("result_template", "")
+    if result_template:
+        ctx["_end_result"] = resolve_template(result_template, ctx)
+    return None
+
+
+async def _handle_failed(node: dict, ctx: dict) -> str | None:
+    """Failed node — terminal failure. Resolves reason_template if present."""
+    reason_template = node.get("reason_template", "")
+    if reason_template:
+        ctx["_fail_reason"] = resolve_template(reason_template, ctx)
     return None
 
 
@@ -128,6 +167,12 @@ async def _handle_condition(node: dict, ctx: dict) -> str | None:
     branches = node.get("branches", {})
     default = node.get("default_branch")
 
+    # Branches can be a list [{value, target}] or dict {value: target}
+    if isinstance(branches, list):
+        branch_map = {b["value"]: b["target"] for b in branches if b.get("value") and b.get("target")}
+    else:
+        branch_map = branches
+
     # Iteration guard
     max_iter = node.get("max_iterations")
     counter_field = node.get("iteration_counter", f"_iter_{node_id}")
@@ -140,7 +185,7 @@ async def _handle_condition(node: dict, ctx: dict) -> str | None:
             )
             return default
 
-    next_node = branches.get(str(value), default) if value is not None else default
+    next_node = branch_map.get(str(value), default) if value is not None else default
     logger.info(
         "Pipeline %s: %s condition %s=%s → %s",
         key, node_id, field, value, next_node,
@@ -156,6 +201,7 @@ async def _handle_condition(node: dict, ctx: dict) -> str | None:
 _NODE_HANDLERS = {
     "start": _handle_start,
     "end": _handle_end,
+    "failed": _handle_failed,
     "claude_agent": _handle_claude_agent,
     "condition": _handle_condition,
 }
@@ -164,17 +210,39 @@ _NODE_HANDLERS = {
 # ── Graph execution ─────────────────────────────────────────────────────────
 
 
-def _build_edge_map(definition: dict) -> dict[str, str]:
-    """Build a map of node_id → next_node_id from edges."""
-    edge_map: dict[str, str] = {}
+def _build_edge_map(definition: dict) -> dict[str, list[str]]:
+    """Build a map of node_id → [next_node_ids] from edges."""
+    edge_map: dict[str, list[str]] = {}
     for edge in definition.get("edges", []):
-        edge_map[edge["from"]] = edge["to"]
+        edge_map.setdefault(edge["from"], []).append(edge["to"])
     return edge_map
 
 
 def _build_node_map(definition: dict) -> dict[str, dict]:
     """Build a map of node_id → node definition."""
     return {node["id"]: node for node in definition.get("nodes", [])}
+
+
+def _get_next_node(node: dict, edge_map: dict[str, list[str]]) -> str | None:
+    """Get the next node for a non-condition node.
+
+    Uses the node's 'targets' field if present (from builder),
+    otherwise falls back to edge_map. Returns first target.
+    """
+    targets = node.get("targets", [])
+    if targets:
+        # Filter empty strings
+        valid = [t for t in targets if t]
+        if valid:
+            return valid[0]
+
+    # Legacy: 'next' field
+    if node.get("next"):
+        return node["next"]
+
+    # Fallback to edge map
+    edges = edge_map.get(node["id"], [])
+    return edges[0] if edges else None
 
 
 async def execute_graph(
@@ -202,7 +270,16 @@ async def execute_graph(
 
     current_id = start_nodes[0]["id"]
     pipeline_start = time.monotonic()
-    logger.info("Pipeline %s: starting graph execution (%d nodes)", key, len(node_map))
+    total_nodes = len(node_map)
+    visited_count = 0
+    logger.info("Pipeline %s: starting graph execution (%d nodes)", key, total_nodes)
+
+    # Initial callback: pipeline is starting
+    await callback({
+        "pipeline_key": key,
+        "status": "starting",
+        "step_log": f"Pipeline starting ({total_nodes} nodes in template)",
+    })
 
     while current_id is not None:
         node = node_map.get(current_id)
@@ -220,30 +297,65 @@ async def execute_graph(
             await callback({"pipeline_key": key, "status": "failed", "error": f"Unknown node type '{node_type}'"})
             return
 
-        # ── End node ────────────────────────────────────────────────────
+        visited_count += 1
+
+        # ── End node (success) ─────────────────────────────────────────
         if node_type == "end":
-            end_status = node.get("status", "done")
+            await handler(node, ctx)
             total_time = time.monotonic() - pipeline_start
+            result_msg = ctx.get("_end_result", "")
             logger.info(
-                "Pipeline %s: reached end node '%s' (status=%s) in %.1fs",
-                key, current_id, end_status, total_time,
+                "Pipeline %s: reached end node '%s' (%s) in %.1fs",
+                key, current_id, node_name, total_time,
             )
             await callback({
                 "pipeline_key": key,
-                "status": end_status,
+                "status": "done",
                 "cost_usd": ctx.get("cost_usd", 0),
-                "step_log": f"Pipeline finished: {end_status}",
+                "step_log": f"Pipeline done: {node_name}" + (f" — {result_msg}" if result_msg else ""),
+            })
+            return
+
+        # ── Failed node (terminal failure) ─────────────────────────────
+        if node_type == "failed":
+            await handler(node, ctx)
+            total_time = time.monotonic() - pipeline_start
+            reason = ctx.get("_fail_reason", "")
+            logger.info(
+                "Pipeline %s: reached failed node '%s' (%s) in %.1fs",
+                key, current_id, node_name, total_time,
+            )
+            # Failed nodes can have targets (retry flow)
+            next_id = _get_next_node(node, edge_map)
+            if next_id:
+                logger.info("Pipeline %s: failed node '%s' has next → %s", key, current_id, next_id)
+                await callback({
+                    "pipeline_key": key,
+                    "status": node.get("status_label", "failed"),
+                    "cost_usd": ctx.get("cost_usd", 0),
+                    "step_log": f"Failed: {node_name}" + (f" — {reason}" if reason else "") + f", continuing to {next_id}",
+                })
+                current_id = next_id
+                continue
+            # Terminal failure
+            await callback({
+                "pipeline_key": key,
+                "status": "failed",
+                "error": reason or f"Pipeline failed at: {node_name}",
+                "cost_usd": ctx.get("cost_usd", 0),
+                "step_log": f"Pipeline failed: {node_name}" + (f" — {reason}" if reason else ""),
             })
             return
 
         # ── Execute node ────────────────────────────────────────────────
         status_label = node.get("status_label")
-        if status_label:
-            await callback({
-                "pipeline_key": key,
-                "status": status_label,
-                "step_log": f"Running: {node_name}",
-            })
+
+        # Always send a "entering node" callback
+        await callback({
+            "pipeline_key": key,
+            "status": status_label or "running",
+            "step_log": f"[{visited_count}/{total_nodes}] Starting: {node_name}",
+        })
 
         node_start = time.monotonic()
         logger.info("Pipeline %s: %s (%s) → started", key, current_id, node_type)
@@ -268,35 +380,36 @@ async def execute_graph(
             # Store raw result in ctx under node_id
             ctx[f"_raw_{current_id}"] = result
 
-            # Extract outputs
-            extract_rules = node.get("extract", {})
-            if extract_rules:
-                extracted = extract_outputs(result, extract_rules)
+            # Extract outputs (new format: [{name, values}])
+            outputs = node.get("outputs", [])
+            if isinstance(outputs, list) and outputs:
+                extracted = extract_outputs_from_text(result, outputs)
                 for field, value in extracted.items():
                     if value is not None:
                         ctx[field] = value
-                        logger.info("Pipeline %s: %s extracted %s=%s", key, current_id, field, value)
+                        logger.info("Pipeline %s: %s extracted %s=%s", key, current_id, field, value[:100] if len(value) > 100 else value)
                     else:
                         logger.warning("Pipeline %s: %s failed to extract '%s'", key, current_id, field)
 
-            # Store named outputs
-            for output_name in node.get("outputs", []):
-                if output_name not in ctx:
-                    # If not already extracted, store the full result
-                    ctx[output_name] = result
-                    logger.info("Pipeline %s: %s output %s stored (full result)", key, current_id, output_name)
+            # Legacy extract rules
+            extract_rules = node.get("extract", {})
+            if extract_rules:
+                extracted = extract_outputs_legacy(result, extract_rules)
+                for field, value in extracted.items():
+                    if value is not None:
+                        ctx[field] = value
 
             # Report progress
             await callback({
                 "pipeline_key": key,
                 "status": status_label or "running",
                 "cost_usd": ctx.get("cost_usd", 0),
-                "step_log": f"{node_name} completed in {node_duration:.1f}s",
-                **{k: ctx.get(k) for k in ["pr_url", "pr_number", "branch", "claude_session_id"] if ctx.get(k)},
+                "step_log": f"[{visited_count}/{total_nodes}] {node_name} completed in {node_duration:.1f}s",
+                **{k: ctx.get(k) for k in ["pr_url", "pr_number", "branch", "claude_session_id", "issue_title"] if ctx.get(k)},
             })
 
-            # Follow edge to next node
-            current_id = edge_map.get(current_id)
+            # Follow to next node
+            current_id = _get_next_node(node, edge_map)
 
         elif node_type == "condition":
             # result is the next node ID (or None)
@@ -309,13 +422,21 @@ async def execute_graph(
                     "cost_usd": ctx.get("cost_usd", 0),
                 })
                 return
+
+            field = node.get("condition_field", "")
+            value = ctx.get(field)
+            await callback({
+                "pipeline_key": key,
+                "status": status_label or "running",
+                "step_log": f"[{visited_count}/{total_nodes}] {node_name}: {field}={value} → {result}",
+            })
             current_id = result
 
         elif node_type == "start":
-            current_id = edge_map.get(current_id)
+            current_id = _get_next_node(node, edge_map)
 
         else:
-            current_id = edge_map.get(current_id)
+            current_id = _get_next_node(node, edge_map)
 
     # Fell off the graph (no more edges)
     total_time = time.monotonic() - pipeline_start

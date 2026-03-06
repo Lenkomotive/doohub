@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, field_validator
 
-ALLOWED_NODE_TYPES = {"start", "end", "claude_agent", "condition"}
+ALLOWED_NODE_TYPES = {"start", "end", "failed", "claude_agent", "condition"}
 
 
 def _validate_definition(definition: dict[str, Any]) -> dict[str, Any]:

@@ -14,6 +14,7 @@ from app.core.fcm import send_push
 from app.core.pipeline_events import pipeline_events
 from app.core.slave_client import slave
 from app.models.pipeline import Pipeline
+from app.models.pipeline_template import PipelineTemplate
 from app.models.user import User
 
 from app.schemas.pipeline import CreatePipelineRequest, PipelineCallbackRequest
@@ -29,6 +30,15 @@ async def create_pipeline(
     user: User = Depends(get_current_user),
 ):
     pipeline_key = uuid4().hex[:12]
+
+    # Look up template definition if template_id is provided
+    template_definition = None
+    if body.template_id:
+        template = db.query(PipelineTemplate).filter(PipelineTemplate.id == body.template_id).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+        template_definition = template.definition
+
     pipeline = Pipeline(
         user_id=user.id,
         pipeline_key=pipeline_key,
@@ -37,6 +47,7 @@ async def create_pipeline(
         issue_title=body.task_description,
         task_description=body.task_description,
         model=body.model,
+        template_id=body.template_id,
     )
     db.add(pipeline)
     db.commit()
@@ -52,6 +63,7 @@ async def create_pipeline(
             task_description=body.task_description,
             model=body.model,
             callback_url=callback_url,
+            template_definition=template_definition,
         )
     except HTTPException:
         pipeline.status = "failed"

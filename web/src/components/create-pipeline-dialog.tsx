@@ -138,14 +138,16 @@ export function CreatePipelineDialog() {
 
     setLoading(true);
 
+    const useTemplate = templateId && templateId !== "__none__";
     for (const issueNum of selectedIssues) {
       const issue = issues.find((i) => i.number === issueNum);
       await createPipeline({
         repo_path: repoPath,
         issue_number: issueNum,
         task_description: issue?.title || undefined,
-        model,
-        ...(templateId ? { template_id: Number(templateId) } : {}),
+        ...(useTemplate
+          ? { template_id: Number(templateId) }
+          : { model }),
       });
     }
 
@@ -180,32 +182,35 @@ export function CreatePipelineDialog() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label>Model</Label>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {models.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
           {templates.length > 0 && (
             <div className="space-y-2">
               <Label>Template</Label>
-              <Select value={templateId} onValueChange={setTemplateId}>
+              <Select value={templateId} onValueChange={(v) => { setTemplateId(v); if (v && v !== "__none__") setModel(""); else setModel("opus"); }}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Default (legacy)" />
+                  <SelectValue placeholder="None (use model)" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">None (use model)</SelectItem>
                   {templates.map((t) => (
                     <SelectItem key={t.id} value={String(t.id)}>
                       {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {(!templateId || templateId === "__none__") && (
+            <div className="space-y-2">
+              <Label>Model</Label>
+              <Select value={model} onValueChange={setModel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
