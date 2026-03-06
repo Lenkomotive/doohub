@@ -10,6 +10,7 @@ import 'pipelines/bloc/pipelines_cubit.dart';
 import 'theme/bloc/theme_cubit.dart';
 import 'package:go_router/go_router.dart';
 import 'router.dart';
+import 'services/notification_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -98,6 +99,7 @@ class _DooHubAppState extends State<DooHubApp> {
     _api = ApiService();
     _authBloc = AuthBloc(_api);
     _router = createRouter(_authBloc);
+    setupNotificationHandlers(_router);
   }
 
   @override

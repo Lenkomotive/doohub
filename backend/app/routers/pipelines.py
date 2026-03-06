@@ -255,7 +255,7 @@ async def pipeline_callback(
         if user and user.fcm_token and user.notify_pipelines:
             title = "Pipeline finished" if body.status == "done" else "Pipeline failed"
             desc = pipeline.issue_title or pipeline.task_description or ""
-            send_push(user.fcm_token, title, desc, {"pipeline_key": body.pipeline_key})
+            send_push(user.fcm_token, title, desc, {"type": "pipeline", "pipeline_key": body.pipeline_key})
 
     return {"ok": True}
 
