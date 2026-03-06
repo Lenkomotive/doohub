@@ -248,9 +248,13 @@ async def pipeline_callback(
         pipeline.total_cost_usd += body.cost_usd
     if body.claude_session_id is not None:
         pipeline.claude_session_id = body.claude_session_id
+    if body.current_node_id is not None:
+        pipeline.current_node_id = body.current_node_id
     db.commit()
 
     event = {"pipeline_key": body.pipeline_key, "status": body.status}
+    if body.current_node_id is not None:
+        event["current_node_id"] = body.current_node_id
     if body.step_log:
         event["step_log"] = body.step_log
     if body.pr_url:
@@ -297,6 +301,9 @@ def _serialize(p: Pipeline) -> dict:
         "review_round": p.review_round,
         "model": p.model,
         "total_cost_usd": p.total_cost_usd,
+        "current_node_id": p.current_node_id,
+        "template_id": p.template_id,
+        "template_definition": p.template.definition if p.template else None,
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
     }

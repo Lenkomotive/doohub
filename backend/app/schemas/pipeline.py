@@ -20,4 +20,5 @@ class PipelineCallbackRequest(BaseModel):
     error: str | None = None
     cost_usd: float | None = None
     claude_session_id: str | None = None
+    current_node_id: str | None = None
     step_log: str | None = None
