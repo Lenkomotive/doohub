@@ -46,6 +46,7 @@ interface PipelinesState {
     issue_number?: number | null;
     task_description?: string | null;
     model?: string;
+    template_id?: number | null;
   }) => Promise<boolean>;
   cancelPipeline: (key: string) => Promise<void>;
   deletePipeline: (key: string) => Promise<void>;
