@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -20,16 +19,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
+import { useSessionsStore } from "@/store/sessions";
 
 const models = [
-  { value: "sonnet", label: "Sonnet" },
   { value: "opus", label: "Opus" },
+  { value: "sonnet", label: "Sonnet" },
   { value: "haiku", label: "Haiku" },
 ];
 
 interface Repo {
   name: string;
   path: string;
+}
+
+function nextSessionName(existingNames: string[]): string {
+  const used = new Set(existingNames.map((n) => n.toUpperCase()));
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for (const c of chars) {
+    if (!used.has(c)) return c;
+  }
+  return chars[used.size % chars.length];
 }
 
 export function CreateSessionDialog({
@@ -39,12 +48,11 @@ export function CreateSessionDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [repos, setRepos] = useState<Repo[]>([]);
-  const [sessionKey, setSessionKey] = useState("");
-  const [model, setModel] = useState("sonnet");
+  const [model, setModel] = useState("opus");
   const [repoPath, setRepoPath] = useState("");
-  const [interactive, setInteractive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const sessions = useSessionsStore((s) => s.sessions);
 
   useEffect(() => {
     if (open) {
@@ -59,29 +67,28 @@ export function CreateSessionDialog({
 
   const handleCreate = async () => {
     setError("");
-    if (!sessionKey.trim() || !repoPath) {
-      setError("Session name and repo are required");
+    if (!repoPath) {
+      setError("Please select a repo");
       return;
     }
 
+    const name = nextSessionName(sessions.map((s) => s.session_key));
     setLoading(true);
     const res = await apiFetch("/sessions", {
       method: "POST",
       body: JSON.stringify({
-        session_key: sessionKey.trim(),
+        session_key: name,
         model,
         project_path: repoPath,
-        interactive,
+        interactive: false,
       }),
     });
 
     if (res.ok) {
       const session = await res.json();
       setOpen(false);
-      setSessionKey("");
-      setModel("sonnet");
+      setModel("opus");
       setRepoPath("");
-      setInteractive(false);
       onCreated(session.session_key);
     } else {
       const data = await res.json();
@@ -102,14 +109,6 @@ export function CreateSessionDialog({
           <DialogTitle>New Session</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Name</Label>
-            <Input
-              value={sessionKey}
-              onChange={(e) => setSessionKey(e.target.value)}
-              placeholder="e.g. a, bugfix, feature"
-            />
-          </div>
           <div className="space-y-2">
             <Label>Model</Label>
             <Select value={model} onValueChange={setModel}>
@@ -134,27 +133,15 @@ export function CreateSessionDialog({
               <SelectContent>
                 {repos.map((r) => (
                   <SelectItem key={r.path} value={r.path}>
-                    {r.name}
+                    {r.path.split("/").pop()}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="interactive"
-              checked={interactive}
-              onChange={(e) => setInteractive(e.target.checked)}
-              className="h-4 w-4 rounded border-border"
-            />
-            <Label htmlFor="interactive" className="text-sm font-normal">
-              Interactive mode
-            </Label>
-          </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button onClick={handleCreate} disabled={loading} className="w-full">
-            {loading ? "Creating..." : "Create session"}
+            {loading ? "Creating..." : "Create"}
           </Button>
         </div>
       </DialogContent>

@@ -16,7 +16,6 @@ import {
   Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { AuthGuard } from "@/components/auth-guard";
 import { apiFetch, apiUpload } from "@/lib/api";
 
@@ -41,7 +40,6 @@ interface SessionInfo {
   status: string;
   model: string;
   project_path: string;
-  interactive: boolean;
   claude_session_id: string | null;
 }
 
@@ -194,12 +192,15 @@ function ChatView() {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-medium">{session.session_key}</h2>
-              <Badge
-                variant={session.status === "busy" ? "default" : "secondary"}
-                className="text-[10px] px-1.5 py-0"
+              <span
+                className={`inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-medium ${
+                  session.status === "busy"
+                    ? "bg-red-500/15 text-red-500"
+                    : "bg-green-500/15 text-green-500"
+                }`}
               >
                 {session.status}
-              </Badge>
+              </span>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1">

@@ -8,7 +8,6 @@ export interface Session {
   model: string;
   project_path: string;
   claude_session_id: string | null;
-  interactive: boolean;
 }
 
 interface SSEConnection {
