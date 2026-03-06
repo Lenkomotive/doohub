@@ -26,6 +26,9 @@ class Pipeline(Base):
     model: Mapped[str] = mapped_column(String(50), default="claude-opus-4-6")
     total_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     claude_session_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pipeline_templates.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
