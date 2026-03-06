@@ -28,6 +28,18 @@ def send_push(fcm_token: str, title: str, body: str, data: dict | None = None) -
             token=fcm_token,
             notification=messaging.Notification(title=title, body=body),
             data=data or {},
+            android=messaging.AndroidConfig(
+                priority="high",
+                notification=messaging.AndroidNotification(
+                    sound="default",
+                    channel_id="default",
+                ),
+            ),
+            apns=messaging.APNSConfig(
+                payload=messaging.APNSPayload(
+                    aps=messaging.Aps(sound="default"),
+                ),
+            ),
         )
         resp = messaging.send(message)
         logger.info("Push sent successfully: %s", resp)
