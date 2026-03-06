@@ -196,6 +196,13 @@ class SlaveClient:
             "issue_number": issue_number,
         })
 
+    async def generate_name(self) -> str:
+        try:
+            data = await self._request("POST", "/api/generate-name")
+            return data.get("name", "New Session")
+        except Exception:
+            return "New Session"
+
     async def get_logs(self, limit: int = 100, level: str | None = None) -> Any:
         params: dict = {"limit": limit}
         if level:

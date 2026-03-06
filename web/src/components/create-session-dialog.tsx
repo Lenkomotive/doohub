@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
-import { useSessionsStore } from "@/store/sessions";
 
 const models = [
   { value: "opus", label: "Opus" },
@@ -30,15 +29,6 @@ const models = [
 interface Repo {
   name: string;
   path: string;
-}
-
-function nextSessionName(existingNames: string[]): string {
-  const used = new Set(existingNames.map((n) => n.toUpperCase()));
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  for (const c of chars) {
-    if (!used.has(c)) return c;
-  }
-  return chars[used.size % chars.length];
 }
 
 export function CreateSessionDialog({
@@ -52,7 +42,6 @@ export function CreateSessionDialog({
   const [repoPath, setRepoPath] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const sessions = useSessionsStore((s) => s.sessions);
 
   useEffect(() => {
     if (open) {
@@ -72,12 +61,10 @@ export function CreateSessionDialog({
       return;
     }
 
-    const name = nextSessionName(sessions.map((s) => s.name));
     setLoading(true);
     const res = await apiFetch("/sessions", {
       method: "POST",
       body: JSON.stringify({
-        name,
         model,
         project_path: repoPath,
       }),

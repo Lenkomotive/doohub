@@ -2,10 +2,9 @@ from pydantic import BaseModel
 
 
 class CreateSessionRequest(BaseModel):
-    name: str
+    name: str | None = None
     model: str = "claude-opus-4-6"
     project_path: str
-    interactive: bool = False
 
 
 class SendMessageRequest(BaseModel):

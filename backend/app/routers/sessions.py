@@ -55,17 +55,17 @@ async def create_session(
     user: User = Depends(get_current_user),
 ):
     session_key = uuid4().hex[:12]
+    name = body.name or await slave.generate_name()
     session = Session(
         user_id=user.id,
         session_key=session_key,
-        name=body.name,
+        name=name,
         project_path=body.project_path,
         model=body.model,
-        interactive=body.interactive,
     )
     db.add(session)
     db.commit()
-    return {"session_key": session_key, "name": body.name}
+    return {"session_key": session_key, "name": name}
 
 
 @router.get("/sessions/events")
