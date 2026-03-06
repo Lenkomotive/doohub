@@ -7,6 +7,7 @@ import asyncio
 import logging
 import re
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from app import claude_runner
@@ -207,6 +208,29 @@ _NODE_HANDLERS = {
 }
 
 
+# ── Step log helpers ─────────────────────────────────────────────────────────
+
+
+def _make_step(node: dict, status: str, started_at: float | None = None, **extra) -> dict:
+    """Build a step log dict for callback reporting."""
+    now = time.monotonic()
+    step = {
+        "node_id": node["id"],
+        "node_name": node.get("name", node["id"]),
+        "node_type": node["type"],
+        "status": status,
+        "started_at": extra.pop("started_at_iso", None) or datetime.now(timezone.utc).isoformat(),
+    }
+    if status in ("completed", "failed", "skipped"):
+        step["completed_at"] = datetime.now(timezone.utc).isoformat()
+        if started_at is not None:
+            step["duration_s"] = round(now - started_at, 1)
+    for k, v in extra.items():
+        if v is not None:
+            step[k] = v
+    return step
+
+
 # ── Graph execution ─────────────────────────────────────────────────────────
 
 
@@ -313,6 +337,7 @@ async def execute_graph(
                 "status": "done",
                 "cost_usd": ctx.get("cost_usd", 0),
                 "step_log": f"Pipeline done: {node_name}" + (f" — {result_msg}" if result_msg else ""),
+                "step": _make_step(node, "completed", pipeline_start, output=result_msg or None),
             })
             return
 
@@ -325,6 +350,7 @@ async def execute_graph(
                 "Pipeline %s: reached failed node '%s' (%s) in %.1fs",
                 key, current_id, node_name, total_time,
             )
+            fail_step = _make_step(node, "failed", pipeline_start, error=reason or None)
             # Failed nodes can have targets (retry flow)
             next_id = _get_next_node(node, edge_map)
             if next_id:
@@ -334,6 +360,7 @@ async def execute_graph(
                     "status": node.get("status_label", "failed"),
                     "cost_usd": ctx.get("cost_usd", 0),
                     "step_log": f"Failed: {node_name}" + (f" — {reason}" if reason else "") + f", continuing to {next_id}",
+                    "step": fail_step,
                 })
                 current_id = next_id
                 continue
@@ -344,20 +371,23 @@ async def execute_graph(
                 "error": reason or f"Pipeline failed at: {node_name}",
                 "cost_usd": ctx.get("cost_usd", 0),
                 "step_log": f"Pipeline failed: {node_name}" + (f" — {reason}" if reason else ""),
+                "step": fail_step,
             })
             return
 
         # ── Execute node ────────────────────────────────────────────────
         status_label = node.get("status_label")
 
+        node_start = time.monotonic()
+        started_at_iso = datetime.now(timezone.utc).isoformat()
+
         # Always send a "entering node" callback
         await callback({
             "pipeline_key": key,
             "status": status_label or "running",
             "step_log": f"[{visited_count}/{total_nodes}] Starting: {node_name}",
+            "step": _make_step(node, "running", started_at_iso=started_at_iso),
         })
-
-        node_start = time.monotonic()
         logger.info("Pipeline %s: %s (%s) → started", key, current_id, node_type)
 
         result = await handler(node, ctx)
@@ -374,6 +404,7 @@ async def execute_graph(
                     "status": "failed",
                     "error": f"Agent '{node_name}' failed",
                     "cost_usd": ctx.get("cost_usd", 0),
+                    "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error="Agent returned no result"),
                 })
                 return
 
@@ -399,12 +430,21 @@ async def execute_graph(
                     if value is not None:
                         ctx[field] = value
 
+            # Build output summary for step log
+            output_summary = None
+            all_outputs = node.get("outputs", [])
+            if isinstance(all_outputs, list) and all_outputs:
+                parts = [f"{o['name']}={ctx.get(o['name'], '?')}" for o in all_outputs if o.get("name")]
+                if parts:
+                    output_summary = ", ".join(parts)
+
             # Report progress
             await callback({
                 "pipeline_key": key,
                 "status": status_label or "running",
                 "cost_usd": ctx.get("cost_usd", 0),
                 "step_log": f"[{visited_count}/{total_nodes}] {node_name} completed in {node_duration:.1f}s",
+                "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso, output=output_summary),
                 **{k: ctx.get(k) for k in ["pr_url", "pr_number", "branch", "claude_session_id", "issue_title"] if ctx.get(k)},
             })
 
@@ -429,6 +469,7 @@ async def execute_graph(
                 "pipeline_key": key,
                 "status": status_label or "running",
                 "step_log": f"[{visited_count}/{total_nodes}] {node_name}: {field}={value} → {result}",
+                "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso, output=f"{field}={value} → {result}"),
             })
             current_id = result
 

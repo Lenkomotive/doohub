@@ -248,11 +248,26 @@ async def pipeline_callback(
         pipeline.total_cost_usd += body.cost_usd
     if body.claude_session_id is not None:
         pipeline.claude_session_id = body.claude_session_id
+
+    # Accumulate step logs
+    if body.step:
+        logs = list(pipeline.step_logs or [])
+        step_dict = body.step.model_dump()
+        # Update existing step or append new one
+        existing_idx = next((i for i, s in enumerate(logs) if s["node_id"] == step_dict["node_id"]), None)
+        if existing_idx is not None and step_dict["status"] in ("completed", "failed"):
+            logs[existing_idx] = step_dict
+        elif existing_idx is None:
+            logs.append(step_dict)
+        pipeline.step_logs = logs
+
     db.commit()
 
     event = {"pipeline_key": body.pipeline_key, "status": body.status}
     if body.step_log:
         event["step_log"] = body.step_log
+    if body.step:
+        event["step"] = body.step.model_dump()
     if body.pr_url:
         event["pr_url"] = body.pr_url
     if body.error:
@@ -297,6 +312,7 @@ def _serialize(p: Pipeline) -> dict:
         "review_round": p.review_round,
         "model": p.model,
         "total_cost_usd": p.total_cost_usd,
+        "step_logs": p.step_logs or [],
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
     }

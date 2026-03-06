@@ -2,6 +2,18 @@ import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
 import { connectSSE } from "@/lib/sse";
 
+export interface StepLog {
+  node_id: string;
+  node_name: string;
+  node_type: string;
+  status: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  duration_s?: number | null;
+  output?: string | null;
+  error?: string | null;
+}
+
 export interface Pipeline {
   pipeline_key: string;
   repo_path: string;
@@ -17,6 +29,7 @@ export interface Pipeline {
   review_round: number;
   model: string;
   total_cost_usd: number;
+  step_logs: StepLog[];
   created_at: string;
   updated_at: string;
 }
@@ -56,7 +69,7 @@ interface PipelinesState {
   disconnectSSE: () => void;
 }
 
-const ACTIVE_STATUSES = new Set(["planning", "planned", "developing", "developed", "reviewing"]);
+const ACTIVE_STATUSES = new Set(["starting", "running", "planning", "planned", "developing", "developed", "reviewing"]);
 
 export function isActive(status: string): boolean {
   return ACTIVE_STATUSES.has(status);
@@ -186,17 +199,29 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
 
     const conn = connectSSE("/pipelines/events", (event, data) => {
       if (event === "pipeline") {
-        const update = data as { pipeline_key: string; status: string; pr_url?: string; error?: string };
+        const update = data as { pipeline_key: string; status: string; pr_url?: string; error?: string; step?: StepLog };
         set((state) => {
           const idx = state.pipelines.findIndex((p) => p.pipeline_key === update.pipeline_key);
           if (idx >= 0) {
             const pipelines = [...state.pipelines];
-            pipelines[idx] = {
-              ...pipelines[idx],
-              status: update.status,
-              ...(update.pr_url !== undefined && { pr_url: update.pr_url }),
-              ...(update.error !== undefined && { error: update.error }),
-            };
+            const pipeline = { ...pipelines[idx] };
+            pipeline.status = update.status;
+            if (update.pr_url !== undefined) pipeline.pr_url = update.pr_url;
+            if (update.error !== undefined) pipeline.error = update.error;
+
+            // Update step_logs from SSE step data
+            if (update.step) {
+              const logs = [...(pipeline.step_logs || [])];
+              const existingIdx = logs.findIndex((s) => s.node_id === update.step!.node_id);
+              if (existingIdx >= 0 && update.step.status !== "running") {
+                logs[existingIdx] = update.step;
+              } else if (existingIdx < 0) {
+                logs.push(update.step);
+              }
+              pipeline.step_logs = logs;
+            }
+
+            pipelines[idx] = pipeline;
             return { pipelines };
           }
           // Unknown pipeline, refetch
