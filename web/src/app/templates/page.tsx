@@ -52,7 +52,7 @@ function TemplatesContent() {
           { id: "start", type: "start" },
           { id: "end", type: "end", status: "done" },
         ],
-        edges: [{ from: "start", to: "end" }],
+        edges: [],
       },
     });
     setCreating(false);

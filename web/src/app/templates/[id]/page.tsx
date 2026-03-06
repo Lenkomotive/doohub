@@ -112,8 +112,6 @@ function BuilderContent() {
           name: "New Condition",
           condition_field: "",
           branches: {},
-          default_branch: "",
-          max_iterations: null,
         },
         end: { id, type, name: "End", status: "done" },
       };
@@ -188,6 +186,7 @@ function BuilderContent() {
 
       {/* Toolbar */}
       <Toolbar
+        nodes={nodes}
         onAddNode={handleAddNode}
         onDeleteSelected={handleDeleteSelected}
         hasSelection={selectedNodeId !== null}
@@ -215,6 +214,7 @@ function BuilderContent() {
         {selectedNode && (
           <ConfigPanel
             node={selectedNode}
+            allNodes={nodes}
             onUpdate={handleNodeUpdate}
             onClose={() => setSelectedNodeId(null)}
           />

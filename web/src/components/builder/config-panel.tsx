@@ -9,11 +9,27 @@ import { Separator } from "@/components/ui/separator";
 
 interface ConfigPanelProps {
   node: Node;
+  allNodes: Node[];
   onUpdate: (id: string, data: Record<string, unknown>) => void;
   onClose: () => void;
 }
 
-export function ConfigPanel({ node, onUpdate, onClose }: ConfigPanelProps) {
+type Branch = { value: string; target: string };
+
+function branchesToArray(branches: Record<string, string> | Branch[]): Branch[] {
+  if (Array.isArray(branches)) return branches;
+  return Object.entries(branches).map(([value, target]) => ({ value, target }));
+}
+
+function branchesToRecord(branches: Branch[]): Record<string, string> {
+  const record: Record<string, string> = {};
+  for (const b of branches) {
+    if (b.value.trim()) record[b.value.trim()] = b.target;
+  }
+  return record;
+}
+
+export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelProps) {
   const { data } = node;
   const nodeType = node.type || data.type;
 
@@ -31,8 +47,8 @@ export function ConfigPanel({ node, onUpdate, onClose }: ConfigPanelProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {/* Name — all types except start */}
-        {nodeType !== "start" && (
+        {/* Name — all types except start and end */}
+        {nodeType !== "start" && nodeType !== "end" && (
           <Field label="Name">
             <Input
               value={(data.name as string) || ""}
@@ -112,22 +128,45 @@ export function ConfigPanel({ node, onUpdate, onClose }: ConfigPanelProps) {
 
             <Separator />
 
-            <Field label="Outputs (comma-separated)">
-              <Input
-                value={((data.outputs as string[]) || []).join(", ")}
-                onChange={(e) =>
-                  update(
-                    "outputs",
-                    e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  )
-                }
-                className="h-7 text-xs"
-                placeholder="e.g. plan, pr_url"
-              />
-            </Field>
+            <div className="space-y-2">
+              <Label className="text-[10px] text-muted-foreground">Outputs</Label>
+              {((data.outputs as string[]) || []).map((output, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <Input
+                    value={output}
+                    onChange={(e) => {
+                      const outputs = [...((data.outputs as string[]) || [])];
+                      outputs[i] = e.target.value;
+                      update("outputs", outputs);
+                    }}
+                    className="h-7 text-xs flex-1"
+                    placeholder="variable name"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => {
+                      const outputs = ((data.outputs as string[]) || []).filter((_, j) => j !== i);
+                      update("outputs", outputs);
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-full text-xs"
+                onClick={() => {
+                  const outputs = [...((data.outputs as string[]) || []), ""];
+                  update("outputs", outputs);
+                }}
+              >
+                Add output
+              </Button>
+            </div>
 
             <Field label="Extract Rules (field:rule per line)">
               <textarea
@@ -153,69 +192,85 @@ export function ConfigPanel({ node, onUpdate, onClose }: ConfigPanelProps) {
         )}
 
         {/* Condition node */}
-        {nodeType === "condition" && (
-          <>
-            <Field label="Condition Field">
-              <Input
-                value={(data.condition_field as string) || ""}
-                onChange={(e) => update("condition_field", e.target.value)}
-                className="h-7 text-xs"
-                placeholder="e.g. verdict"
-              />
-            </Field>
+        {nodeType === "condition" && (() => {
+          const targetNodes = allNodes.filter((n) => n.id !== node.id);
+          const branches = branchesToArray(
+            (data.branches as Record<string, string> | Branch[]) || [],
+          );
 
-            <Field label="Branches (value:target per line)">
-              <textarea
-                value={Object.entries((data.branches as Record<string, string>) || {})
-                  .map(([k, v]) => `${k}:${v}`)
-                  .join("\n")}
-                onChange={(e) => {
-                  const branches: Record<string, string> = {};
-                  e.target.value.split("\n").forEach((line) => {
-                    const idx = line.indexOf(":");
-                    if (idx > 0) {
-                      branches[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-                    }
-                  });
-                  update("branches", branches);
-                }}
-                rows={3}
-                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs font-mono resize-y"
-                placeholder={"APPROVED:done\nCHANGES_REQUESTED:developer"}
-              />
-            </Field>
+          function updateBranches(updated: Branch[]) {
+            update("branches", branchesToRecord(updated));
+          }
 
-            <Field label="Default Branch">
-              <Input
-                value={(data.default_branch as string) || ""}
-                onChange={(e) => update("default_branch", e.target.value)}
-                className="h-7 text-xs"
-                placeholder="e.g. fail"
-              />
-            </Field>
+          return (
+            <>
+              <Field label="Condition Field">
+                <Input
+                  value={(data.condition_field as string) || ""}
+                  onChange={(e) => update("condition_field", e.target.value)}
+                  className="h-7 text-xs"
+                  placeholder="e.g. verdict"
+                />
+              </Field>
 
-            <Field label="Max Iterations">
-              <Input
-                type="number"
-                value={(data.max_iterations as number) || ""}
-                onChange={(e) =>
-                  update("max_iterations", e.target.value ? Number(e.target.value) : null)
-                }
-                className="h-7 text-xs"
-                placeholder="unlimited"
-              />
-            </Field>
+              <Separator />
 
-            <Field label="Iteration Counter">
-              <Input
-                value={(data.iteration_counter as string) || ""}
-                onChange={(e) => update("iteration_counter", e.target.value)}
-                className="h-7 text-xs"
-                placeholder="e.g. review_round"
-              />
-            </Field>
-          </>
-        )}
+              <div className="space-y-2">
+                <Label className="text-[10px] text-muted-foreground">Branches</Label>
+                {branches.map((branch, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <Input
+                      value={branch.value}
+                      onChange={(e) => {
+                        const updated = [...branches];
+                        updated[i] = { ...updated[i], value: e.target.value };
+                        updateBranches(updated);
+                      }}
+                      className="h-7 text-xs flex-1"
+                      placeholder="value"
+                    />
+                    <select
+                      value={branch.target}
+                      onChange={(e) => {
+                        const updated = [...branches];
+                        updated[i] = { ...updated[i], target: e.target.value };
+                        updateBranches(updated);
+                      }}
+                      className="h-7 flex-1 rounded-md border border-input bg-background px-1.5 text-xs"
+                    >
+                      <option value="">→ select node</option>
+                      {targetNodes.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {(n.data.name as string) || n.id}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        updateBranches(branches.filter((_, j) => j !== i));
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-full text-xs"
+                  onClick={() => {
+                    updateBranches([...branches, { value: "", target: "" }]);
+                  }}
+                >
+                  Add branch
+                </Button>
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
