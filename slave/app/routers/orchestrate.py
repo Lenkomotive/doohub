@@ -15,6 +15,7 @@ class StartPipelineRequest(BaseModel):
     task_description: str | None = None
     model: str = "claude-sonnet-4-6"
     callback_url: str
+    template_definition: dict | None = None
 
 
 @router.post("")
@@ -28,6 +29,7 @@ async def start_pipeline(body: StartPipelineRequest):
             model=body.model,
             callback_url=body.callback_url,
             api_key=settings.api_key,
+            template_definition=body.template_definition,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
