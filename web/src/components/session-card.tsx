@@ -29,7 +29,7 @@ export function SessionCard({
       onClick={onClick}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <h3 className="text-sm font-medium">{session.session_key}</h3>
+        <h3 className="text-sm font-medium">{session.name}</h3>
         <div className="flex items-center gap-2">
           <span
             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${color.bg} ${color.text}`}

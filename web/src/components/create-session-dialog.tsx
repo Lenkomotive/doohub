@@ -72,7 +72,7 @@ export function CreateSessionDialog({
       return;
     }
 
-    const name = nextSessionName(sessions.map((s) => s.session_key));
+    const name = nextSessionName(sessions.map((s) => s.name));
     setLoading(true);
     const res = await apiFetch("/sessions", {
       method: "POST",

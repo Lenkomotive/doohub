@@ -4,6 +4,7 @@ import { connectSSE } from "@/lib/sse";
 
 export interface Session {
   session_key: string;
+  name: string;
   status: "idle" | "busy";
   model: string;
   project_path: string;

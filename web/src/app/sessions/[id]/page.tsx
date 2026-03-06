@@ -37,6 +37,7 @@ interface Message {
 
 interface SessionInfo {
   session_key: string;
+  name: string;
   status: string;
   model: string;
   project_path: string;
@@ -191,7 +192,7 @@ function ChatView() {
           </Button>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-medium">{session.session_key}</h2>
+              <h2 className="text-sm font-medium">{session.name || session.session_key}</h2>
               <span
                 className={`inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-medium ${
                   session.status === "busy"
