@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Activity } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/app-shell";
 import { SessionCard } from "@/components/session-card";
 import { CreateSessionDialog } from "@/components/create-session-dialog";
@@ -11,8 +10,14 @@ import { useSessionsStore } from "@/store/sessions";
 import { SkeletonList } from "@/components/skeleton-card";
 
 function SessionsContent() {
-  const { sessions, sessionFilter, isLoading, fetchSessions, setSessionFilter, deleteSession, connectSSE, disconnectSSE } =
-    useSessionsStore();
+  const {
+    sessions,
+    isLoading,
+    fetchSessions,
+    deleteSession,
+    connectSSE,
+    disconnectSSE,
+  } = useSessionsStore();
   const router = useRouter();
 
   useEffect(() => {
@@ -21,41 +26,13 @@ function SessionsContent() {
     return () => disconnectSSE();
   }, [fetchSessions, connectSSE, disconnectSSE]);
 
-  const busyCount = sessions.filter((s) => s.status === "busy").length;
-  const idleCount = sessions.filter((s) => s.status === "idle").length;
-
-  const filters = [
-    { label: "All", value: null, count: sessions.length },
-    { label: "Busy", value: "busy" as const, count: busyCount },
-    { label: "Idle", value: "idle" as const, count: idleCount },
-  ];
-
   return (
     <div className="p-6">
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-medium">Sessions</h2>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="flex gap-0.5">
-            {filters.map((f) => (
-              <Button
-                key={f.label}
-                variant={sessionFilter === f.value ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setSessionFilter(f.value)}
-              >
-                {f.label}
-                {f.count > 0 && (
-                  <span className="ml-1 text-xs text-muted-foreground">{f.count}</span>
-                )}
-              </Button>
-            ))}
-          </div>
-          <CreateSessionDialog
-            onCreated={(key) => router.push(`/sessions/${key}`)}
-          />
-        </div>
+        <h2 className="text-lg font-medium">Sessions</h2>
+        <CreateSessionDialog
+          onCreated={(key) => router.push(`/sessions/${key}`)}
+        />
       </div>
 
       {isLoading && sessions.length === 0 ? (

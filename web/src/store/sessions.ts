@@ -16,49 +16,35 @@ interface SSEConnection {
 
 interface SessionsState {
   sessions: Session[];
-  sessionsTotal: number;
   isLoading: boolean;
-  sessionFilter: string | null;
   sseConnection: SSEConnection | null;
-  fetchSessions: (status?: string | null) => Promise<void>;
+  fetchSessions: () => Promise<void>;
   deleteSession: (key: string) => Promise<void>;
-  setSessionFilter: (status: string | null) => void;
   connectSSE: () => void;
   disconnectSSE: () => void;
 }
 
 export const useSessionsStore = create<SessionsState>((set, get) => ({
   sessions: [],
-  sessionsTotal: 0,
   isLoading: false,
-  sessionFilter: null,
   sseConnection: null,
-
-  setSessionFilter: (status) => {
-    set({ sessionFilter: status });
-    get().fetchSessions(status);
-  },
 
   deleteSession: async (key) => {
     set((state) => ({
       sessions: state.sessions.filter((s) => s.session_key !== key),
-      sessionsTotal: state.sessionsTotal - 1,
     }));
     const res = await apiFetch(`/sessions/${key}`, { method: "DELETE" });
     if (!res.ok) {
-      get().fetchSessions(get().sessionFilter);
+      get().fetchSessions();
     }
   },
 
-  fetchSessions: async (status) => {
+  fetchSessions: async () => {
     set({ isLoading: true });
-    const params = new URLSearchParams();
-    if (status) params.set("status", status);
-
-    const res = await apiFetch(`/sessions?${params}`);
+    const res = await apiFetch("/sessions");
     if (res.ok) {
       const data = await res.json();
-      set({ sessions: data.sessions, sessionsTotal: data.total, isLoading: false });
+      set({ sessions: data.sessions, isLoading: false });
     } else {
       set({ isLoading: false });
     }
@@ -75,19 +61,16 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
           ...s,
           session_key: key,
         }));
-        const filter = get().sessionFilter;
-        const filtered = filter ? sessions.filter((s) => s.status === filter) : sessions;
-        set({ sessions: filtered, sessionsTotal: filtered.length });
+        set({ sessions });
       } else if (event === "status") {
         const update = data as { session_key: string; status: string };
-        set((state) => {
-          const sessions = state.sessions.map((s) =>
+        set((state) => ({
+          sessions: state.sessions.map((s) =>
             s.session_key === update.session_key
               ? { ...s, status: update.status as "idle" | "busy" }
               : s
-          );
-          return { sessions };
-        });
+          ),
+        }));
       }
     });
 
