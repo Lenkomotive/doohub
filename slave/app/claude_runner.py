@@ -115,7 +115,10 @@ async def run_prompt(
     _ensure_claude_config()
     await _git_pull(project_path)
     cwd = _resolve_cwd(project_path)
-    logger.info("Running claude in %s", cwd)
+    logger.info("Running claude in %s session=%s model=%s", cwd, session_key, model)
+
+    import time as _time
+    _start = _time.monotonic()
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -131,17 +134,21 @@ async def run_prompt(
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
+        logger.warning("Claude timed out after %ds session=%s", timeout, session_key)
         return {"type": "error", "subtype": "timeout", "error": "Response timed out.", "session_id": claude_session_id}
     finally:
         if session_key:
             _running_procs.pop(session_key, None)
         _ensure_claude_config()
 
+    duration = round(_time.monotonic() - _start, 1)
+
     if proc.returncode != 0:
         err = stderr.decode("utf-8", errors="replace").strip()
-        logger.error("Claude exited %d: %s", proc.returncode, err)
+        logger.error("Claude exited %d after %.1fs session=%s: %s", proc.returncode, duration, session_key, err)
         return {"type": "error", "error": err or f"Claude exited with code {proc.returncode}", "session_id": claude_session_id}
 
+    logger.info("Claude finished in %.1fs session=%s", duration, session_key)
     raw = stdout.decode("utf-8", errors="replace").strip()
     try:
         return json.loads(raw)
@@ -168,7 +175,7 @@ async def stream_prompt(
     _ensure_claude_config()
     await _git_pull(project_path)
     cwd = _resolve_cwd(project_path)
-    logger.info("Streaming claude in %s", cwd)
+    logger.info("Streaming claude in %s session=%s model=%s", cwd, session_key, model)
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,

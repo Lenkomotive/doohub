@@ -5,22 +5,33 @@
 import asyncio
 import logging
 import os
+import time
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.slave_client import _session_event_consumer
+from app.core.log_buffer import log_buffer
+from app.core.slave_client import _session_event_consumer, slave
 from app.models.pipeline_template import PipelineTemplate
+from app.models.user import User
 from app.routers import auth, pipeline_templates, pipelines, sessions
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+# Attach the in-memory buffer to the root logger so it captures everything
+log_buffer.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+logging.getLogger().addHandler(log_buffer)
+
 logger = logging.getLogger(__name__)
+req_logger = logging.getLogger("doohub.requests")
 
 DEFAULT_TEMPLATE_DEFINITION = {
     "version": 1,
@@ -146,6 +157,30 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+        request.state.request_id = request_id
+        start = time.monotonic()
+        response = await call_next(request)
+        duration_ms = round((time.monotonic() - start) * 1000)
+        # Extract session key from path if present (e.g. /sessions/{key}/messages)
+        path = request.url.path
+        parts = path.strip("/").split("/")
+        session_key = parts[1] if len(parts) >= 2 and parts[0] == "sessions" else ""
+        extra = f" session={session_key}" if session_key else ""
+        req_logger.info(
+            "%s %s %s %dms [rid=%s]%s",
+            request.method, path, response.status_code,
+            duration_ms, request_id, extra,
+        )
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+app.add_middleware(RequestLoggingMiddleware)
+
 cors_origins = ["http://localhost:3000"]
 if os.environ.get("DOOHUB_CORS_ORIGIN"):
     cors_origins.append(os.environ["DOOHUB_CORS_ORIGIN"])
@@ -168,3 +203,20 @@ app.include_router(pipeline_templates.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/logs")
+async def get_logs(
+    limit: int = 100,
+    level: str | None = None,
+    _user: User = Depends(get_current_user),
+):
+    backend_logs = log_buffer.get_logs(limit=limit, level=level)
+    # Also fetch slave logs
+    slave_logs = []
+    try:
+        slave_data = await slave.get_logs(limit=limit, level=level)
+        slave_logs = slave_data.get("logs", [])
+    except Exception:
+        pass
+    return {"backend": backend_logs, "slave": slave_logs}

@@ -27,10 +27,13 @@ class SlaveClient:
             timeout=httpx.Timeout(300.0, connect=10.0),
         )
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+    async def _request(self, method: str, path: str, request_id: str | None = None, **kwargs: Any) -> Any:
         try:
+            headers = kwargs.pop("headers", {})
+            if request_id:
+                headers["X-Request-ID"] = request_id
             async with self._client() as client:
-                resp = await client.request(method, path, **kwargs)
+                resp = await client.request(method, path, headers=headers, **kwargs)
         except httpx.ConnectError:
             raise HTTPException(status_code=502, detail="Slave service is unreachable")
         except httpx.TimeoutException:
@@ -188,6 +191,12 @@ class SlaveClient:
             "repo_path": repo_path,
             "issue_number": issue_number,
         })
+
+    async def get_logs(self, limit: int = 100, level: str | None = None) -> Any:
+        params: dict = {"limit": limit}
+        if level:
+            params["level"] = level
+        return await self._request("GET", "/api/logs", params=params)
 
 
 slave = SlaveClient()
