@@ -1,11 +1,22 @@
 "use client";
 
+import { useRef } from "react";
 import type { Node } from "@xyflow/react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+
+const PIPELINE_VARS = [
+  "issue_number",
+  "issue_title",
+  "issue_body",
+  "repo_path",
+  "branch",
+  "model",
+];
 
 interface ConfigPanelProps {
   node: Node;
@@ -32,10 +43,36 @@ function branchesToRecord(branches: Branch[]): Record<string, string> {
 export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelProps) {
   const { data } = node;
   const nodeType = node.type || data.type;
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   function update(field: string, value: unknown) {
     onUpdate(node.id, { ...data, [field]: value });
   }
+
+  function insertVar(varName: string) {
+    const ta = promptRef.current;
+    if (!ta) return;
+    const tag = `{{${varName}}}`;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const current = (data.prompt_template as string) || "";
+    const updated = current.slice(0, start) + tag + current.slice(end);
+    update("prompt_template", updated);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = start + tag.length;
+    });
+  }
+
+  // Collect outputs from agent nodes that appear before this node in the graph
+  const agentVars = allNodes
+    .filter((n) => n.type === "claude_agent" && n.id !== node.id)
+    .flatMap((n) => {
+      const name = (n.data.name as string) || n.id;
+      const outputs = (n.data.outputs as string[]) || [];
+      const extractFields = Object.keys((n.data.extract as Record<string, string>) || {});
+      return [...outputs, ...extractFields].map((v) => ({ source: name, var: v }));
+    });
 
   return (
     <div className="flex h-full w-72 flex-col border-l border-border/50 bg-card/30">
@@ -75,14 +112,47 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
         {/* Claude Agent node */}
         {nodeType === "claude_agent" && (
           <>
-            <Field label="Prompt Template">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] text-muted-foreground">Prompt Template</Label>
+              <div className="space-y-1">
+                <div className="flex flex-wrap gap-1">
+                  <span className="text-[9px] text-muted-foreground/70 w-full">Pipeline:</span>
+                  {PIPELINE_VARS.map((v) => (
+                    <Badge
+                      key={v}
+                      variant="outline"
+                      className="text-[9px] px-1 py-0 font-mono cursor-pointer hover:bg-accent"
+                      onClick={() => insertVar(v)}
+                    >
+                      {v}
+                    </Badge>
+                  ))}
+                </div>
+                {agentVars.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    <span className="text-[9px] text-muted-foreground/70 w-full">Agents:</span>
+                    {agentVars.map((av) => (
+                      <Badge
+                        key={`${av.source}-${av.var}`}
+                        variant="outline"
+                        className="text-[9px] px-1 py-0 font-mono cursor-pointer hover:bg-accent"
+                        onClick={() => insertVar(av.var)}
+                        title={`from ${av.source}`}
+                      >
+                        {av.var}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
               <textarea
+                ref={promptRef}
                 value={(data.prompt_template as string) || ""}
                 onChange={(e) => update("prompt_template", e.target.value)}
                 rows={8}
                 className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs font-mono resize-y"
               />
-            </Field>
+            </div>
 
             <Field label="Model">
               <select
