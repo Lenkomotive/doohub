@@ -63,7 +63,11 @@ class ApiService {
     try {
       final refreshToken = await _storage.read(key: 'refresh_token');
       if (refreshToken == null) return false;
-      final res = await _dio.post('/auth/refresh', data: {
+      // Use a plain Dio instance to avoid triggering the 401 interceptor loop
+      final res = await Dio(BaseOptions(
+        baseUrl: baseUrl,
+        headers: {'Content-Type': 'application/json'},
+      )).post('/auth/refresh', data: {
         'refresh_token': refreshToken,
       });
       await _storage.write(key: 'access_token', value: res.data['access_token']);
