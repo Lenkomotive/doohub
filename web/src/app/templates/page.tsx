@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Workflow } from "lucide-react";
+import { Plus, Workflow } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { TemplateCard } from "@/components/template-card";
 import { SkeletonList } from "@/components/skeleton-card";
@@ -16,12 +16,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 function TemplatesContent() {
   const router = useRouter();
-  const { templates, isLoading, fetchTemplates, deleteTemplate } =
+  const { templates, isLoading, fetchTemplates, deleteTemplate, createTemplate } =
     useTemplatesStore();
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
@@ -31,6 +37,31 @@ function TemplatesContent() {
     if (deleteId === null) return;
     await deleteTemplate(deleteId);
     setDeleteId(null);
+  };
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    const template = await createTemplate({
+      name: newName.trim(),
+      description: newDescription.trim() || null,
+      definition: {
+        version: 1,
+        name: newName.trim(),
+        nodes: [
+          { id: "start", type: "start" },
+          { id: "end", type: "end", status: "done" },
+        ],
+        edges: [{ from: "start", to: "end" }],
+      },
+    });
+    setCreating(false);
+    if (template) {
+      setShowCreate(false);
+      setNewName("");
+      setNewDescription("");
+      router.push(`/templates/${template.id}`);
+    }
   };
 
   const deleteTarget = templates.find((t) => t.id === deleteId);
@@ -44,6 +75,10 @@ function TemplatesContent() {
             ({templates.length})
           </span>
         </div>
+        <Button size="sm" onClick={() => setShowCreate(true)}>
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          New Template
+        </Button>
       </div>
 
       {isLoading && templates.length === 0 ? (
@@ -81,6 +116,47 @@ function TemplatesContent() {
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New template</DialogTitle>
+            <DialogDescription>
+              Create a pipeline template with a start and end node. You can add
+              more nodes in the visual builder.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Name</Label>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="e.g. Code Review Pipeline"
+                className="h-8 text-sm"
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Description (optional)</Label>
+              <Input
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                placeholder="What does this pipeline do?"
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowCreate(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={!newName.trim() || creating}>
+              {creating ? "Creating…" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
