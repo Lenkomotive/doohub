@@ -77,10 +77,9 @@ export function CreateSessionDialog({
     const res = await apiFetch("/sessions", {
       method: "POST",
       body: JSON.stringify({
-        session_key: name,
+        name,
         model,
         project_path: repoPath,
-        interactive: false,
       }),
     });
 
