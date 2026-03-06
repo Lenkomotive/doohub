@@ -169,20 +169,6 @@ async def cancel(key: str):
 
 @router.post("/generate-name")
 async def generate_name():
-    """Generate a short creative session name using Haiku."""
-    result = await claude_runner.run_prompt(
-        prompt=(
-            "Generate a single random first name from anywhere in the world. "
-            "Use names from all cultures — African, Asian, European, Middle Eastern, Latin American, etc. "
-            "Just one first name, no last name, no quotes, no explanation. Just the name."
-        ),
-        project_path=str(os.path.expanduser("~")),
-        model="claude-haiku-4-5-20251001",
-        timeout=15,
-        session_key="__name_gen__",
-    )
-    name = result.get("result", "").strip().strip('"').strip("'")
-    if not name or result.get("type") == "error":
-        from uuid import uuid4
-        name = uuid4().hex[:6].capitalize()
-    return {"name": name}
+    """Return a random first name from a pre-built global list."""
+    from app.names import random_name
+    return {"name": random_name()}
