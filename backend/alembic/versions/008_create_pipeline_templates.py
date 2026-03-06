@@ -22,6 +22,7 @@ def upgrade() -> None:
         "pipeline_templates",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("name", sa.String(200), unique=True, nullable=False),
+        sa.Column("description", sa.String(500), nullable=True),
         sa.Column("definition", JSONB, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),

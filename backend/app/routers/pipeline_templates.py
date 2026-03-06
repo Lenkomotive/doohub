@@ -48,7 +48,7 @@ def create_template(
     if existing:
         raise HTTPException(status_code=409, detail="Template with this name already exists")
 
-    template = PipelineTemplate(name=body.name, definition=body.definition)
+    template = PipelineTemplate(name=body.name, description=body.description, definition=body.definition)
     db.add(template)
     db.commit()
     db.refresh(template)
@@ -74,6 +74,9 @@ def update_template(
         if dup:
             raise HTTPException(status_code=409, detail="Template with this name already exists")
         template.name = body.name
+
+    if body.description is not None:
+        template.description = body.description
 
     if body.definition is not None:
         template.definition = body.definition

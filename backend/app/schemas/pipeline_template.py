@@ -42,12 +42,17 @@ def _validate_definition(definition: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"Edge at index {i} missing 'from'")
         if "to" not in edge:
             raise ValueError(f"Edge at index {i} missing 'to'")
+        if edge["from"] not in node_ids:
+            raise ValueError(f"Edge at index {i}: 'from' references unknown node '{edge['from']}'")
+        if edge["to"] not in node_ids:
+            raise ValueError(f"Edge at index {i}: 'to' references unknown node '{edge['to']}'")
 
     return definition
 
 
 class PipelineTemplateCreate(BaseModel):
     name: str
+    description: str | None = None
     definition: dict[str, Any]
 
     @field_validator("definition")
@@ -58,6 +63,7 @@ class PipelineTemplateCreate(BaseModel):
 
 class PipelineTemplateUpdate(BaseModel):
     name: str | None = None
+    description: str | None = None
     definition: dict[str, Any] | None = None
 
     @field_validator("definition")
@@ -71,6 +77,7 @@ class PipelineTemplateUpdate(BaseModel):
 class PipelineTemplateResponse(BaseModel):
     id: int
     name: str
+    description: str | None = None
     definition: dict[str, Any]
     created_at: datetime
     updated_at: datetime
