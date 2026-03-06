@@ -1,10 +1,9 @@
-import 'dart:developer' as developer;
 import 'dart:io' show Platform;
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'api.dart';
 
-void _log(String msg) => developer.log(msg, name: 'FCM');
+void _log(String msg) => print('[FCM] $msg');
 
 Future<void> registerFcmToken(ApiService api) async {
   try {
