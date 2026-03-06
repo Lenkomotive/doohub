@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 import { usePipelinesStore } from "@/store/pipelines";
+import { useTemplatesStore, type PipelineTemplate } from "@/store/templates";
 
 const models = [
   { value: "opus", label: "Opus" },
@@ -44,6 +45,8 @@ export function CreatePipelineDialog() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [issuesCursor, setIssuesCursor] = useState<string | null>(null);
   const [hasMoreIssues, setHasMoreIssues] = useState(false);
+  const [templates, setTemplates] = useState<PipelineTemplate[]>([]);
+  const [templateId, setTemplateId] = useState<string>("");
   const [model, setModel] = useState("opus");
   const [repoPath, setRepoPath] = useState("");
   const [selectedIssues, setSelectedIssues] = useState<number[]>([]);
@@ -62,11 +65,19 @@ export function CreatePipelineDialog() {
           setRepos(data.repos);
         }
       });
+      apiFetch("/pipeline-templates").then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          setTemplates(data);
+        }
+      });
     } else {
       setRepoPath("");
       setModel("opus");
+      setTemplateId("");
       setSelectedIssues([]);
       setIssues([]);
+      setTemplates([]);
       setError("");
     }
   }, [open]);
@@ -134,6 +145,7 @@ export function CreatePipelineDialog() {
         issue_number: issueNum,
         task_description: issue?.title || undefined,
         model,
+        ...(templateId ? { template_id: Number(templateId) } : {}),
       });
     }
 
@@ -183,6 +195,23 @@ export function CreatePipelineDialog() {
               </SelectContent>
             </Select>
           </div>
+          {templates.length > 0 && (
+            <div className="space-y-2">
+              <Label>Template</Label>
+              <Select value={templateId} onValueChange={setTemplateId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Default (legacy)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {repoPath && (
             <div className="space-y-2">
               <Label>Issues</Label>
