@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,12 @@ function formatDate(iso: string): string {
 export function TemplateCard({
   template,
   onClick,
+  onDuplicate,
   onDelete,
 }: {
   template: PipelineTemplate;
   onClick?: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const nodeCount = template.definition?.nodes?.length ?? 0;
@@ -44,6 +46,17 @@ export function TemplateCard({
         </div>
         <div className="flex items-center gap-1">
           <Badge variant="outline">{nodeCount} nodes</Badge>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDuplicate();
+            }}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"

@@ -56,6 +56,35 @@ def create_template(
     return template
 
 
+@router.post("/pipeline-templates/{template_id}/duplicate", status_code=201, response_model=PipelineTemplateResponse)
+def duplicate_template(
+    template_id: int,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    template = db.query(PipelineTemplate).filter(PipelineTemplate.id == template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    base_name = f"{template.name} (Copy)"
+    new_name = base_name
+    counter = 2
+    while db.query(PipelineTemplate).filter(PipelineTemplate.name == new_name).first():
+        new_name = f"{template.name} (Copy {counter})"
+        counter += 1
+
+    clone = PipelineTemplate(
+        name=new_name,
+        description=template.description,
+        definition=template.definition,
+    )
+    db.add(clone)
+    db.commit()
+    db.refresh(clone)
+    logger.info("Duplicated pipeline template '%s' -> '%s' (id=%d)", template.name, clone.name, clone.id)
+    return clone
+
+
 @router.put("/pipeline-templates/{template_id}", response_model=PipelineTemplateResponse)
 def update_template(
     template_id: int,

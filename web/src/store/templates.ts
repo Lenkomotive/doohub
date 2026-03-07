@@ -33,6 +33,7 @@ interface TemplatesState {
   fetchTemplates: () => Promise<void>;
   createTemplate: (body: CreateTemplateBody) => Promise<PipelineTemplate | null>;
   updateTemplate: (id: number, body: UpdateTemplateBody) => Promise<PipelineTemplate | null>;
+  duplicateTemplate: (id: number) => Promise<PipelineTemplate | null>;
   deleteTemplate: (id: number) => Promise<boolean>;
 }
 
@@ -82,6 +83,18 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
       if (err.detail) detail = typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail);
     } catch {}
     throw new Error(detail);
+  },
+
+  duplicateTemplate: async (id) => {
+    const res = await apiFetch(`/pipeline-templates/${id}/duplicate`, {
+      method: "POST",
+    });
+    if (res.ok) {
+      const template = await res.json();
+      set((state) => ({ templates: [template, ...state.templates] }));
+      return template;
+    }
+    return null;
   },
 
   deleteTemplate: async (id) => {
