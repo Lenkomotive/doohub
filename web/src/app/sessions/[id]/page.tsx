@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AuthGuard } from "@/components/auth-guard";
 import { apiFetch, apiUpload } from "@/lib/api";
+import Markdown from "react-markdown";
 
 interface Attachment {
   id: number;
@@ -241,7 +242,13 @@ function ChatView() {
                     : "bg-muted text-foreground"
                 }`}
               >
-                <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+                {msg.role === "user" ? (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                ) : (
+                  <div className="prose prose-sm dark:prose-invert max-w-none chat-prose">
+                    <Markdown>{msg.content}</Markdown>
+                  </div>
+                )}
                 {msg.attachments && msg.attachments.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {msg.attachments.map((att) => (

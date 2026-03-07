@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
+import Markdown from "react-markdown";
 import { usePipelinesStore } from "@/store/pipelines";
 import { SkeletonList } from "@/components/skeleton-card";
 import type { PipelineTemplate } from "@/store/templates";
@@ -226,7 +227,9 @@ function IssuesContent() {
                     Loading...
                   </div>
                 ) : issueBody ? (
-                  <pre className="whitespace-pre-wrap font-sans text-sm text-foreground/90">{issueBody}</pre>
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-foreground/90">
+                    <Markdown>{issueBody}</Markdown>
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">No description</p>
                 )}
