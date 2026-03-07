@@ -132,7 +132,7 @@ class SlaveClient:
             yield event
 
     async def cancel(self, key: str) -> Any:
-        return await self._request("POST", f"/api/sessions/{key}/cancel")
+        return await self._request("POST", f"/api/cancel/{key}")
 
     async def list_repos(self) -> Any:
         return await self._request("GET", "/api/repos")
