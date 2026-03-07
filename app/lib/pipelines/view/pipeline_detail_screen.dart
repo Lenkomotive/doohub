@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/pipeline.dart';
+import '../../sessions/view/markdown_message.dart';
 import '../bloc/pipelines_cubit.dart';
 import '../bloc/pipelines_state.dart' show MergeStatus, PipelinesState;
 
@@ -241,10 +242,7 @@ class _PlanCardState extends State<_PlanCard> {
               ),
               if (_expanded) ...[
                 const SizedBox(height: 12),
-                SelectableText(
-                  widget.plan,
-                  style: const TextStyle(fontSize: 13, height: 1.5),
-                ),
+                MarkdownMessage(data: widget.plan),
               ],
             ],
           ),
@@ -399,10 +397,7 @@ class _ErrorCard extends StatelessWidget {
             const Icon(Icons.error_outline, color: Colors.red, size: 20),
             const SizedBox(width: 8),
             Expanded(
-              child: SelectableText(
-                error,
-                style: const TextStyle(fontSize: 13, color: Colors.red),
-              ),
+              child: MarkdownMessage(data: error),
             ),
           ],
         ),
