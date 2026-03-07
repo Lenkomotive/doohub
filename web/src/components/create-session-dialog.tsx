@@ -56,17 +56,13 @@ export function CreateSessionDialog({
 
   const handleCreate = async () => {
     setError("");
-    if (!repoPath) {
-      setError("Please select a repo");
-      return;
-    }
 
     setLoading(true);
     const res = await apiFetch("/sessions", {
       method: "POST",
       body: JSON.stringify({
         model,
-        project_path: repoPath,
+        ...(repoPath && repoPath !== "general" ? { project_path: repoPath } : {}),
       }),
     });
 
@@ -117,6 +113,7 @@ export function CreateSessionDialog({
                 <SelectValue placeholder="Select a repo" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="general">General (no repo)</SelectItem>
                 {repos.map((r) => (
                   <SelectItem key={r.path} value={r.path}>
                     {r.path.split("/").pop()}
