@@ -34,6 +34,11 @@ def resolve_template(template: str, ctx: dict[str, Any]) -> str:
 # ── Output extraction ──────────────────────────────────────────────────────
 
 
+def _keyword_match(keyword: str, text: str) -> bool:
+    """Check if keyword appears as a whole word in text (case-insensitive)."""
+    return bool(re.search(r"\b" + re.escape(keyword) + r"\b", text, re.IGNORECASE))
+
+
 def extract_outputs_from_text(text: str, outputs: list[dict]) -> dict[str, str | None]:
     """Extract named outputs from agent response text.
 
@@ -44,7 +49,6 @@ def extract_outputs_from_text(text: str, outputs: list[dict]) -> dict[str, str |
     If values is empty, stores the full text as the output value.
     """
     results: dict[str, str | None] = {}
-    upper_text = text.upper()
 
     for output in outputs:
         name = output.get("name", "")
@@ -53,10 +57,10 @@ def extract_outputs_from_text(text: str, outputs: list[dict]) -> dict[str, str |
         values = output.get("values", [])
 
         if values:
-            # Keyword match: find which value appears in the text
+            # Keyword match: find which value appears as a whole word in the text
             found = None
             for v in values:
-                if v.strip().upper() in upper_text:
+                if _keyword_match(v.strip(), text):
                     found = v.strip()
                     break
             results[name] = found
@@ -78,10 +82,9 @@ def extract_outputs_legacy(text: str, extract_rules: dict[str, str]) -> dict[str
             results[field] = match.group(0) if match else None
         elif rule.startswith("keyword:"):
             keywords = rule[len("keyword:"):].split("|")
-            upper_text = text.upper()
             found = None
             for kw in keywords:
-                if kw.strip().upper() in upper_text:
+                if _keyword_match(kw.strip(), text):
                     found = kw.strip()
                     break
             results[field] = found
