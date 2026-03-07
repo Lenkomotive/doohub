@@ -127,6 +127,16 @@ async def _handle_claude_agent(node: dict, ctx: dict) -> str | None:
     retry_config = node.get("retry", {})
     max_attempts = retry_config.get("max_attempts", 1)
 
+    # Determine which session to resume (if any)
+    resume_from = node.get("resume_from")  # resume another node's session
+    resume_self = node.get("resume_self", False)  # resume own session on re-entry
+    session_id = None
+    if resume_self and f"_session_{node_id}" in ctx:
+        session_id = ctx[f"_session_{node_id}"]
+    elif resume_from and f"_session_{resume_from}" in ctx:
+        session_id = ctx[f"_session_{resume_from}"]
+    # else: fresh session (no resume)
+
     for attempt in range(1, max_attempts + 1):
         if attempt > 1:
             logger.info("Pipeline %s: %s attempt %d/%d", key, node_id, attempt, max_attempts)
@@ -137,7 +147,7 @@ async def _handle_claude_agent(node: dict, ctx: dict) -> str | None:
             model=model,
             timeout=timeout,
             session_key=f"__graph_{key}_{node_id}__",
-            claude_session_id=ctx.get("claude_session_id"),
+            claude_session_id=session_id,
         )
 
         if result.get("type") == "error":
@@ -150,9 +160,9 @@ async def _handle_claude_agent(node: dict, ctx: dict) -> str | None:
             ctx[f"_error_{node_id}"] = error_msg
             return None
 
-        # Track session and cost
+        # Store session per node and track cost
         if result.get("session_id"):
-            ctx["claude_session_id"] = result["session_id"]
+            ctx[f"_session_{node_id}"] = result["session_id"]
         ctx["cost_usd"] = ctx.get("cost_usd", 0) + (result.get("cost_usd") or 0)
 
         return result.get("result", "")
