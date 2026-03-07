@@ -17,6 +17,7 @@ import { EndNode } from "@/components/builder/end-node";
 import { FailedNode } from "@/components/builder/failed-node";
 import { AgentNode } from "@/components/builder/agent-node";
 import { ConditionNode } from "@/components/builder/condition-node";
+import type { StepLog } from "@/store/pipelines";
 
 const nodeTypes = {
   start: StartNode,
@@ -52,6 +53,7 @@ interface PipelineGraphProps {
   currentNodeId: string | null;
   completedNodeIds: string[];
   pipelineStatus: string;
+  stepLogs?: StepLog[];
 }
 
 function getNodeStatus(
@@ -73,6 +75,7 @@ function PipelineGraphInner({
   currentNodeId,
   completedNodeIds,
   pipelineStatus,
+  stepLogs,
 }: PipelineGraphProps) {
   const { nodes, edges } = useMemo(() => {
     const flow = definitionToFlow(definition as Parameters<typeof definitionToFlow>[0]);
@@ -86,12 +89,18 @@ function PipelineGraphInner({
   const styledNodes: Node[] = useMemo(() => {
     return nodes.map((node) => {
       const status = getNodeStatus(node.id, currentNodeId, completedNodeIds, pipelineStatus);
+      const stepInfo = stepLogs?.find((s) => s.node_id === node.id);
       return {
         ...node,
         style: statusStyles[status],
+        data: {
+          ...node.data,
+          duration_s: stepInfo?.duration_s,
+          statusLabel: status,
+        },
       };
     });
-  }, [nodes, currentNodeId, completedNodeIds, pipelineStatus]);
+  }, [nodes, currentNodeId, completedNodeIds, pipelineStatus, stepLogs]);
 
   const styledEdges: Edge[] = useMemo(() => {
     return edges.map((edge) => {

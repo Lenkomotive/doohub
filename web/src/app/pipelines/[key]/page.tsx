@@ -287,6 +287,7 @@ function PipelineDetail() {
               currentNodeId={pipeline.current_node_id}
               completedNodeIds={pipeline.completed_node_ids ?? []}
               pipelineStatus={pipeline.status}
+              stepLogs={pipeline.step_logs}
             />
           </CardContent>
         </Card>

@@ -79,6 +79,10 @@ export function isActive(status: string): boolean {
   return ACTIVE_STATUSES.has(status);
 }
 
+function completedFromStepLogs(logs: StepLog[]): string[] {
+  return logs.filter((s) => s.status === "completed").map((s) => s.node_id);
+}
+
 export const usePipelinesStore = create<PipelinesState>((set, get) => ({
   pipelines: [],
   total: 0,
@@ -93,7 +97,7 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
       const data = await res.json();
       const pipelines = (data.pipelines as Pipeline[]).map((p) => ({
         ...p,
-        completed_node_ids: p.completed_node_ids || [],
+        completed_node_ids: completedFromStepLogs(p.step_logs || []),
       }));
       set({ pipelines, total: data.total, isLoading: false });
     } else {
