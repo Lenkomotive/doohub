@@ -206,12 +206,13 @@ class ApiService {
     int? issueNumber,
     String? taskDescription,
     String model = 'claude-opus-4-6',
+    int? templateId,
   }) async {
     final res = await _dio.post('/pipelines', data: {
       'repo_path': repoPath,
       if (issueNumber != null) 'issue_number': issueNumber,
       if (taskDescription != null) 'task_description': taskDescription,
-      'model': model,
+      if (templateId != null) 'template_id': templateId else 'model': model,
     });
     return res.data;
   }
@@ -257,6 +258,18 @@ class ApiService {
         }
       }
     }
+  }
+
+  // Templates
+
+  Future<List<dynamic>> getTemplates() async {
+    final res = await _dio.get('/pipeline-templates');
+    return res.data as List;
+  }
+
+  Future<Map<String, dynamic>> getTemplate(int id) async {
+    final res = await _dio.get('/pipeline-templates/$id');
+    return res.data;
   }
 
   // Repos

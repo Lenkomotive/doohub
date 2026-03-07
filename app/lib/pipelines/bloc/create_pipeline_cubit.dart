@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../models/pipeline_template.dart';
 import '../../services/api.dart';
 import 'create_pipeline_state.dart';
 import 'pipelines_cubit.dart';
@@ -10,6 +11,7 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
   CreatePipelineCubit({required this.api, required this.pipelinesCubit})
       : super(const CreatePipelineState()) {
     loadRepos();
+    loadTemplates();
   }
 
   Future<void> loadRepos() async {
@@ -23,6 +25,22 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
       if (first.isNotEmpty) loadIssues(first);
     } catch (_) {
       if (!isClosed) emit(state.copyWith(loadingRepos: false));
+    }
+  }
+
+  Future<void> loadTemplates() async {
+    try {
+      final data = await api.getTemplates();
+      final templates = data.map((e) => PipelineTemplate.fromJson(e as Map<String, dynamic>)).toList();
+      if (!isClosed) emit(state.copyWith(templates: templates));
+    } catch (_) {}
+  }
+
+  void selectTemplate(int? templateId) {
+    if (templateId == null) {
+      emit(state.copyWith(clearTemplateId: true));
+    } else {
+      emit(state.copyWith(selectedTemplateId: templateId));
     }
   }
 
@@ -100,6 +118,7 @@ class CreatePipelineCubit extends Cubit<CreatePipelineState> {
           issueNumber: issueNumber,
           taskDescription: issue?['title'] as String?,
           model: state.selectedModel,
+          templateId: state.selectedTemplateId,
         );
       }
       return true;

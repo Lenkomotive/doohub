@@ -269,16 +269,29 @@ class _CreatePipelineSheetState extends State<_CreatePipelineSheet> {
                     onChanged: (v) => cubit.selectRepo(v ?? ''),
                   ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: state.selectedModel,
-                  decoration: const InputDecoration(labelText: 'Model', border: OutlineInputBorder()),
-                  items: const [
-                    DropdownMenuItem(value: 'claude-sonnet-4-6', child: Text('Sonnet')),
-                    DropdownMenuItem(value: 'claude-opus-4-6', child: Text('Opus')),
-                    DropdownMenuItem(value: 'claude-haiku-4-5-20251001', child: Text('Haiku')),
-                  ],
-                  onChanged: (v) => cubit.selectModel(v ?? 'claude-opus-4-6'),
-                ),
+                if (state.templates.isNotEmpty) ...[
+                  DropdownButtonFormField<int>(
+                    value: state.selectedTemplateId,
+                    decoration: const InputDecoration(labelText: 'Template', border: OutlineInputBorder()),
+                    items: [
+                      const DropdownMenuItem<int>(value: null, child: Text('None (use model)')),
+                      ...state.templates.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))),
+                    ],
+                    onChanged: (v) => cubit.selectTemplate(v),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (!state.useTemplate)
+                  DropdownButtonFormField<String>(
+                    initialValue: state.selectedModel,
+                    decoration: const InputDecoration(labelText: 'Model', border: OutlineInputBorder()),
+                    items: const [
+                      DropdownMenuItem(value: 'claude-sonnet-4-6', child: Text('Sonnet')),
+                      DropdownMenuItem(value: 'claude-opus-4-6', child: Text('Opus')),
+                      DropdownMenuItem(value: 'claude-haiku-4-5-20251001', child: Text('Haiku')),
+                    ],
+                    onChanged: (v) => cubit.selectModel(v ?? 'claude-opus-4-6'),
+                  ),
                 const SizedBox(height: 12),
                 Text('Select issues', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
                 const SizedBox(height: 8),

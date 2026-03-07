@@ -7,8 +7,10 @@ import 'auth/view/login_screen.dart';
 import 'home/view/home_screen.dart';
 import 'sessions/view/sessions_screen.dart';
 import 'pipelines/view/pipelines_screen.dart';
+import 'templates/view/templates_screen.dart';
 import 'settings/view/settings_screen.dart';
 import 'pipelines/view/pipeline_detail_screen.dart';
+import 'templates/view/template_detail_screen.dart';
 import 'sessions/view/chat_screen.dart';
 
 GoRouter createRouter(AuthBloc authBloc) {
@@ -54,6 +56,14 @@ GoRouter createRouter(AuthBloc authBloc) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/templates',
+                builder: (context, state) => const TemplatesScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/settings',
                 builder: (context, state) => const SettingsScreen(),
               ),
@@ -71,6 +81,11 @@ GoRouter createRouter(AuthBloc authBloc) {
         path: '/pipelines/:key',
         builder: (context, state) =>
             PipelineDetailScreen(pipelineKey: state.pathParameters['key']!),
+      ),
+      GoRoute(
+        path: '/templates/:id',
+        builder: (context, state) =>
+            TemplateDetailScreen(templateId: int.parse(state.pathParameters['id']!)),
       ),
     ],
   );

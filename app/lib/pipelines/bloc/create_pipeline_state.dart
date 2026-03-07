@@ -1,9 +1,12 @@
 import 'package:equatable/equatable.dart';
+import '../../models/pipeline_template.dart';
 
 class CreatePipelineState extends Equatable {
   final List<String> repos;
   final String selectedRepo;
   final String selectedModel;
+  final List<PipelineTemplate> templates;
+  final int? selectedTemplateId;
   final List<Map<String, dynamic>> issues;
   final Set<int> selectedIssueNumbers;
   final bool loadingRepos;
@@ -17,6 +20,8 @@ class CreatePipelineState extends Equatable {
     this.repos = const [],
     this.selectedRepo = '',
     this.selectedModel = 'claude-opus-4-6',
+    this.templates = const [],
+    this.selectedTemplateId,
     this.issues = const [],
     this.selectedIssueNumbers = const {},
     this.loadingRepos = true,
@@ -27,10 +32,15 @@ class CreatePipelineState extends Equatable {
     this.hasMoreIssues = false,
   });
 
+  bool get useTemplate => selectedTemplateId != null;
+
   CreatePipelineState copyWith({
     List<String>? repos,
     String? selectedRepo,
     String? selectedModel,
+    List<PipelineTemplate>? templates,
+    int? selectedTemplateId,
+    bool clearTemplateId = false,
     List<Map<String, dynamic>>? issues,
     Set<int>? selectedIssueNumbers,
     bool? loadingRepos,
@@ -45,6 +55,8 @@ class CreatePipelineState extends Equatable {
       repos: repos ?? this.repos,
       selectedRepo: selectedRepo ?? this.selectedRepo,
       selectedModel: selectedModel ?? this.selectedModel,
+      templates: templates ?? this.templates,
+      selectedTemplateId: clearTemplateId ? null : (selectedTemplateId ?? this.selectedTemplateId),
       issues: issues ?? this.issues,
       selectedIssueNumbers: selectedIssueNumbers ?? this.selectedIssueNumbers,
       loadingRepos: loadingRepos ?? this.loadingRepos,
@@ -61,6 +73,8 @@ class CreatePipelineState extends Equatable {
         repos,
         selectedRepo,
         selectedModel,
+        templates,
+        selectedTemplateId,
         issues,
         selectedIssueNumbers,
         loadingRepos,
