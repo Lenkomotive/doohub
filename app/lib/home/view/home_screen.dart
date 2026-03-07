@@ -22,6 +22,7 @@ class HomeShell extends StatelessWidget {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'Sessions'),
           NavigationDestination(icon: Icon(Icons.device_hub_outlined), selectedIcon: Icon(Icons.device_hub), label: 'Pipelines'),
+          NavigationDestination(icon: Icon(Icons.account_tree_outlined), selectedIcon: Icon(Icons.account_tree), label: 'Templates'),
           NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),

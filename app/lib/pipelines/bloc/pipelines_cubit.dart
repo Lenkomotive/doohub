@@ -83,12 +83,14 @@ class PipelinesCubit extends Cubit<PipelinesState> {
     int? issueNumber,
     String? taskDescription,
     String model = 'claude-opus-4-6',
+    int? templateId,
   }) async {
     final data = await api.createPipeline(
       repoPath: repoPath,
       issueNumber: issueNumber,
       taskDescription: taskDescription,
       model: model,
+      templateId: templateId,
     );
     await fetchPipelines();
     return data['pipeline_key'] as String;
