@@ -386,9 +386,9 @@ function PipelineDetail() {
           </CardHeader>
           {planExpanded && (
             <CardContent>
-              <pre className="text-sm whitespace-pre-wrap font-mono bg-muted/50 rounded-md p-3 max-h-96 overflow-y-auto">
-                {pipeline.plan}
-              </pre>
+              <div className="text-sm prose prose-sm dark:prose-invert max-w-none bg-muted/50 rounded-md p-3 max-h-96 overflow-y-auto">
+                <Markdown>{pipeline.plan}</Markdown>
+              </div>
             </CardContent>
           )}
         </Card>
