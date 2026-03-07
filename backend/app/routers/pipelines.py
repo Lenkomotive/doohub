@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,16 +12,27 @@ from app.core.auth import get_current_user, require_slave_api_key
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.fcm import send_push
-from app.core.pipeline_events import pipeline_events
+from app.core.pipeline_events import classify_event, pipeline_events
 from app.core.slave_client import slave
 from app.models.pipeline import Pipeline
 from app.models.pipeline_template import PipelineTemplate
 from app.models.user import User
 
-from app.schemas.pipeline import CreatePipelineRequest, PipelineCallbackRequest
+from app.schemas.pipeline import (
+    CreatePipelineRequest,
+    DashboardPipeline,
+    DashboardResponse,
+    DashboardSummary,
+    PipelineCallbackRequest,
+    StepsResponse,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["pipelines"])
+
+
+ACTIVE_STATUSES = {"planning", "developing", "reviewing", "running"}
+TERMINAL_STATUSES = {"done", "failed", "cancelled", "merged"}
 
 
 @router.post("/pipelines", status_code=201)
@@ -106,6 +118,14 @@ async def pipeline_sse(
     }
 
     async def generate():
+        # Send catch-up events from the ring buffer
+        recent = pipeline_events.get_recent()
+        for evt in recent:
+            pk = evt.get("pipeline_key")
+            if pk in user_keys:
+                event_type = evt.get("event_type", "pipeline")
+                yield f"event: {event_type}\ndata: {json.dumps(evt)}\n\n"
+
         q = pipeline_events.subscribe()
         try:
             while True:
@@ -123,13 +143,86 @@ async def pipeline_sse(
                     if p:
                         user_keys.add(pk)
                 if pk in user_keys:
-                    yield f"event: pipeline\ndata: {json.dumps(event)}\n\n"
+                    event_type = event.get("event_type", "pipeline")
+                    yield f"event: {event_type}\ndata: {json.dumps(event)}\n\n"
         except asyncio.CancelledError:
             pass
         finally:
             pipeline_events.unsubscribe(q)
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@router.get("/pipelines/dashboard", response_model=DashboardResponse)
+async def pipeline_dashboard(
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipelines = (
+        db.query(Pipeline)
+        .filter(Pipeline.user_id == user.id)
+        .order_by(Pipeline.created_at.desc())
+        .all()
+    )
+
+    running = 0
+    completed = 0
+    failed = 0
+    items: list[DashboardPipeline] = []
+
+    now = datetime.now(timezone.utc)
+
+    for p in pipelines:
+        if p.status in ACTIVE_STATUSES:
+            running += 1
+        elif p.status in ("done", "merged"):
+            completed += 1
+        elif p.status == "failed":
+            failed += 1
+
+        # Derive current_node from step_logs
+        current_node = None
+        step_logs = p.step_logs or []
+        if step_logs:
+            running_steps = [s for s in step_logs if s.get("status") == "running"]
+            if running_steps:
+                current_node = running_steps[-1].get("node_name")
+            else:
+                current_node = step_logs[-1].get("node_name")
+
+        # Compute duration
+        created = p.created_at
+        updated = p.updated_at
+        if p.status in TERMINAL_STATUSES and updated and created:
+            duration_s = round((updated - created).total_seconds(), 1)
+        elif created:
+            duration_s = round((now - created).total_seconds(), 1)
+        else:
+            duration_s = None
+
+        items.append(DashboardPipeline(
+            pipeline_key=p.pipeline_key,
+            issue_number=p.issue_number,
+            issue_title=p.issue_title,
+            repo_path=p.repo_path,
+            status=p.status,
+            current_node=current_node,
+            model=p.model,
+            total_cost_usd=p.total_cost_usd,
+            duration_s=duration_s,
+            started_at=created.isoformat() if created else "",
+            updated_at=updated.isoformat() if updated else "",
+        ))
+
+    return DashboardResponse(
+        summary=DashboardSummary(
+            running=running,
+            completed=completed,
+            failed=failed,
+            total=len(pipelines),
+        ),
+        pipelines=items,
+    )
 
 
 @router.get("/pipelines/{pipeline_key}")
@@ -140,6 +233,54 @@ async def get_pipeline(
 ):
     pipeline = _get_user_pipeline(db, pipeline_key, user.id)
     return _serialize(pipeline)
+
+
+@router.get("/pipelines/{pipeline_key}/steps", response_model=StepsResponse)
+async def get_pipeline_steps(
+    pipeline_key: str,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipeline = _get_user_pipeline(db, pipeline_key, user.id)
+    return StepsResponse(
+        pipeline_key=pipeline.pipeline_key,
+        status=pipeline.status,
+        steps=pipeline.step_logs or [],
+    )
+
+
+@router.get("/pipelines/{pipeline_key}/stream")
+async def pipeline_key_sse(
+    pipeline_key: str,
+    user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db),
+):
+    pipeline = _get_user_pipeline(db, pipeline_key, user.id)
+
+    async def generate():
+        # Send catch-up events from the ring buffer
+        recent = pipeline_events.get_recent(pipeline_key=pipeline.pipeline_key)
+        for evt in recent:
+            event_type = evt.get("event_type", "pipeline")
+            yield f"event: {event_type}\ndata: {json.dumps(evt)}\n\n"
+
+        q = pipeline_events.subscribe()
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=30)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                if event.get("pipeline_key") == pipeline.pipeline_key:
+                    event_type = event.get("event_type", "pipeline")
+                    yield f"event: {event_type}\ndata: {json.dumps(event)}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            pipeline_events.unsubscribe(q)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.post("/pipelines/{pipeline_key}/cancel")
@@ -231,6 +372,8 @@ async def pipeline_callback(
     if not pipeline:
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
+    previous_status = pipeline.status
+
     pipeline.status = body.status
     if body.issue_title is not None:
         pipeline.issue_title = body.issue_title
@@ -263,15 +406,27 @@ async def pipeline_callback(
 
     db.commit()
 
-    event = {"pipeline_key": body.pipeline_key, "status": body.status}
-    if body.step_log:
-        event["step_log"] = body.step_log
+    # Build enriched event
+    event: dict = {
+        "pipeline_key": body.pipeline_key,
+        "status": body.status,
+        "user_id": pipeline.user_id,
+        "previous_status": previous_status,
+    }
     if body.step:
         event["step"] = body.step.model_dump()
+        event["node_id"] = body.step.node_id
+        event["node_name"] = body.step.node_name
+    if body.step_log:
+        event["step_log"] = body.step_log
     if body.pr_url:
         event["pr_url"] = body.pr_url
     if body.error:
         event["error"] = body.error
+    if body.cost_usd is not None:
+        event["cost_usd"] = body.cost_usd
+
+    event["event_type"] = classify_event(event)
     await pipeline_events.publish(event)
 
     if body.status in ("done", "failed"):
