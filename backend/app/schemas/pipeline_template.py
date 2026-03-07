@@ -83,3 +83,26 @@ class PipelineTemplateResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class DryRunRequest(BaseModel):
+    context: dict[str, Any] = {}
+
+
+class DryRunNodeReport(BaseModel):
+    node_id: str
+    node_name: str
+    node_type: str
+    resolved_prompt: str | None = None
+    missing_variables: list[str] = []
+    branches: dict[str, str] | None = None
+    default_branch: str | None = None
+    next_nodes: list[str] = []
+
+
+class DryRunResponse(BaseModel):
+    template_name: str
+    execution_order: list[str]
+    nodes: list[DryRunNodeReport]
+    warnings: list[str]
+    valid: bool
