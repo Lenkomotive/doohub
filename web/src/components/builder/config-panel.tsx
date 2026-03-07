@@ -301,6 +301,42 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
 
             <Separator />
 
+            <div className="space-y-2">
+              <Label className="text-[10px] text-muted-foreground">Session</Label>
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!data.resume_self}
+                  onChange={(e) => {
+                    update("resume_self", e.target.checked || undefined);
+                    if (e.target.checked) update("resume_from", undefined);
+                  }}
+                  className="rounded"
+                />
+                Resume own session on re-entry
+              </label>
+              {!data.resume_self && (
+                <Field label="Resume from node">
+                  <select
+                    value={(data.resume_from as string) || ""}
+                    onChange={(e) => update("resume_from", e.target.value || undefined)}
+                    className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+                  >
+                    <option value="">Fresh session (default)</option>
+                    {allNodes
+                      .filter((n) => n.type === "claude_agent" && n.id !== node.id)
+                      .map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {(n.data.name as string) || n.id}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+              )}
+            </div>
+
+            <Separator />
+
             <NextNodes
               targets={(data.targets as string[]) || []}
               allNodes={allNodes}
