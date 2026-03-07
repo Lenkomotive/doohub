@@ -245,7 +245,7 @@ function ChatView() {
                 {msg.role === "user" ? (
                   <p className="whitespace-pre-wrap">{msg.content}</p>
                 ) : (
-                  <div className="prose prose-sm dark:prose-invert max-w-none [&_pre]:bg-background/20 [&_pre]:rounded-md [&_pre]:p-2 [&_code]:text-xs">
+                  <div className="prose prose-sm dark:prose-invert max-w-none chat-prose">
                     <Markdown>{msg.content}</Markdown>
                   </div>
                 )}

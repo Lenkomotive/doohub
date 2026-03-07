@@ -135,3 +135,11 @@
 .typing-dot {
   animation: typingDot 1.2s infinite;
 }
+
+.chat-prose pre {
+  @apply bg-background/20 rounded-md p-2;
+}
+
+.chat-prose code {
+  @apply text-xs;
+}
