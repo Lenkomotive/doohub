@@ -66,11 +66,12 @@ def duplicate_template(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    base_name = f"{template.name} (Copy)"
-    new_name = base_name
+    max_suffix = 10  # longest suffix: " (Copy NN)"
+    truncated = template.name[:200 - max_suffix]
+    new_name = f"{truncated} (Copy)"
     counter = 2
     while db.query(PipelineTemplate).filter(PipelineTemplate.name == new_name).first():
-        new_name = f"{template.name} (Copy {counter})"
+        new_name = f"{truncated} (Copy {counter})"
         counter += 1
 
     clone = PipelineTemplate(
