@@ -4,11 +4,16 @@ Reads a JSON pipeline definition and executes nodes in order,
 following edges and condition branches. Reports progress via callbacks.
 """
 import asyncio
+import json
 import logging
+import os
 import re
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+
+import httpx
 
 from app import claude_runner
 
@@ -200,12 +205,61 @@ async def _handle_condition(node: dict, ctx: dict) -> str | None:
     return next_node
 
 
+async def _handle_read_file(node: dict, ctx: dict) -> str | None:
+    """Read a file from the worktree and return its contents."""
+    key = ctx["pipeline_key"]
+    node_id = node["id"]
+    file_path = resolve_template(node.get("file_path", ""), ctx)
+    if not file_path:
+        logger.error("Pipeline %s: %s no file_path specified", key, node_id)
+        return None
+    base = ctx.get("worktree_path") or ctx.get("repo_path", "/projects")
+    full = os.path.realpath(os.path.join(base, file_path))
+    if not full.startswith(os.path.realpath(base)):
+        logger.error("Pipeline %s: %s path traversal blocked: %s", key, node_id, file_path)
+        return None
+    try:
+        return Path(full).read_text()
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        logger.error("Pipeline %s: %s read failed: %s", key, node_id, e)
+        return None
+
+
+async def _handle_http_request(node: dict, ctx: dict) -> str | None:
+    """Make an HTTP request and return the response body."""
+    key = ctx["pipeline_key"]
+    node_id = node["id"]
+    url = resolve_template(node.get("url", ""), ctx)
+    if not url:
+        logger.error("Pipeline %s: %s no url specified", key, node_id)
+        return None
+    method = (node.get("method") or "GET").upper()
+    raw_headers = node.get("headers") or {}
+    if isinstance(raw_headers, str):
+        try:
+            raw_headers = json.loads(resolve_template(raw_headers, ctx))
+        except (json.JSONDecodeError, TypeError):
+            raw_headers = {}
+    headers = {k: resolve_template(str(v), ctx) for k, v in raw_headers.items()}
+    body = resolve_template(node.get("body", ""), ctx) or None
+    timeout = min(node.get("timeout", 30), 120)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.request(method, url, headers=headers, content=body)
+            return resp.text
+    except (httpx.HTTPError, ValueError) as e:
+        logger.error("Pipeline %s: %s request failed: %s", key, node_id, e)
+        return None
+
+
 _NODE_HANDLERS = {
     "start": _handle_start,
     "end": _handle_end,
     "failed": _handle_failed,
     "claude_agent": _handle_claude_agent,
     "condition": _handle_condition,
+    "read_file": _handle_read_file,
+    "http_request": _handle_http_request,
 }
 
 
@@ -484,6 +538,28 @@ async def execute_graph(
             current_id = _get_next_node(node, edge_map)
 
         else:
+            # Generic action nodes (read_file, http_request, etc.)
+            if result is not None:
+                ctx[f"_raw_{current_id}"] = result
+                store_as = node.get("store_as")
+                if store_as:
+                    ctx[store_as] = result
+            elif ctx.get(f"_error_{current_id}"):
+                error_msg = ctx[f"_error_{current_id}"]
+                await callback({
+                    "pipeline_key": key,
+                    "status": "failed",
+                    "error": f"'{node_name}' failed: {error_msg}",
+                    "cost_usd": ctx.get("cost_usd", 0),
+                    "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error=error_msg),
+                })
+                return
+            await callback({
+                "pipeline_key": key,
+                "status": status_label or "running",
+                "step_log": f"[{visited_count}/{total_nodes}] {node_name} completed in {node_duration:.1f}s",
+                "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso),
+            })
             current_id = _get_next_node(node, edge_map)
 
     # Fell off the graph (no more edges)

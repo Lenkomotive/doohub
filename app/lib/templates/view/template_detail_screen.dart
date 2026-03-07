@@ -207,9 +207,21 @@ class _RectNode extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isCondition = node.type == 'condition';
+    final isReadFile = node.type == 'read_file';
+    final isHttpRequest = node.type == 'http_request';
 
-    final borderColor = isCondition ? Colors.amber : cs.primary;
-    final bgColor = isCondition ? Colors.amber.withValues(alpha: 0.05) : cs.surface;
+    final borderColor = isCondition
+        ? Colors.amber
+        : isReadFile
+            ? Colors.blue
+            : isHttpRequest
+                ? Colors.orange
+                : cs.primary;
+    final bgColor = isCondition
+        ? Colors.amber.withValues(alpha: 0.05)
+        : (isReadFile || isHttpRequest)
+            ? borderColor.withValues(alpha: 0.05)
+            : cs.surface;
 
     return Container(
       width: _nodeW,
@@ -227,7 +239,13 @@ class _RectNode extends StatelessWidget {
           Row(
             children: [
               Icon(
-                isCondition ? Icons.fork_right : Icons.smart_toy_outlined,
+                isCondition
+                    ? Icons.fork_right
+                    : isReadFile
+                        ? Icons.description
+                        : isHttpRequest
+                            ? Icons.http
+                            : Icons.smart_toy_outlined,
                 size: 14,
                 color: borderColor,
               ),
@@ -245,7 +263,11 @@ class _RectNode extends StatelessWidget {
           Text(
             isCondition
                 ? (node.conditionField ?? 'condition')
-                : (node.model ?? 'default'),
+                : isReadFile
+                    ? (node.filePath ?? 'file')
+                    : isHttpRequest
+                        ? '${node.method ?? 'GET'} ${node.url ?? 'url'}'
+                        : (node.model ?? 'default'),
             style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
             overflow: TextOverflow.ellipsis,
           ),

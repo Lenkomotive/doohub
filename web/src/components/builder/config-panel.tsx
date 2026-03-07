@@ -66,13 +66,18 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
   }
 
   // Collect outputs from agent nodes that appear before this node in the graph
-  const agentVars = allNodes
-    .filter((n) => n.type === "claude_agent" && n.id !== node.id)
-    .flatMap((n) => {
-      const name = (n.data.name as string) || n.id;
-      const outputs = (n.data.outputs as OutputDef[]) || [];
-      return outputs.filter((o) => o.name).map((o) => ({ source: name, var: o.name }));
-    });
+  const agentVars = [
+    ...allNodes
+      .filter((n) => n.type === "claude_agent" && n.id !== node.id)
+      .flatMap((n) => {
+        const name = (n.data.name as string) || n.id;
+        const outputs = (n.data.outputs as OutputDef[]) || [];
+        return outputs.filter((o) => o.name).map((o) => ({ source: name, var: o.name }));
+      }),
+    ...allNodes
+      .filter((n) => (n.type === "read_file" || n.type === "http_request") && n.id !== node.id && n.data.store_as)
+      .map((n) => ({ source: (n.data.name as string) || n.id, var: n.data.store_as as string })),
+  ];
 
   return (
     <div className="flex h-full w-[28rem] flex-col border-l border-border/50 bg-card/30">
@@ -298,6 +303,131 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
                 Add output
               </Button>
             </div>
+
+            <Separator />
+
+            <NextNodes
+              targets={(data.targets as string[]) || []}
+              allNodes={allNodes}
+              currentNodeId={node.id}
+              onUpdate={(targets) => update("targets", targets)}
+            />
+          </>
+        )}
+
+        {/* Read File node */}
+        {nodeType === "read_file" && (
+          <>
+            <TemplateField
+              label="File Path"
+              placeholder="e.g. src/config.json"
+              value={(data.file_path as string) || ""}
+              onChange={(v) => update("file_path", v)}
+              pipelineVars={PIPELINE_VARS}
+              agentVars={agentVars}
+            />
+
+            <Field label="Store Result As">
+              <Input
+                value={(data.store_as as string) || ""}
+                onChange={(e) => update("store_as", e.target.value)}
+                className="h-7 text-xs"
+                placeholder="e.g. file_contents"
+              />
+            </Field>
+
+            <Field label="Status Label">
+              <Input
+                value={(data.status_label as string) || ""}
+                onChange={(e) => update("status_label", e.target.value)}
+                className="h-7 text-xs"
+                placeholder="e.g. reading config"
+              />
+            </Field>
+
+            <Separator />
+
+            <NextNodes
+              targets={(data.targets as string[]) || []}
+              allNodes={allNodes}
+              currentNodeId={node.id}
+              onUpdate={(targets) => update("targets", targets)}
+            />
+          </>
+        )}
+
+        {/* HTTP Request node */}
+        {nodeType === "http_request" && (
+          <>
+            <Field label="Method">
+              <select
+                value={(data.method as string) || "GET"}
+                onChange={(e) => update("method", e.target.value)}
+                className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+                <option value="PATCH">PATCH</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+            </Field>
+
+            <TemplateField
+              label="URL"
+              placeholder="e.g. https://api.example.com/data"
+              value={(data.url as string) || ""}
+              onChange={(v) => update("url", v)}
+              pipelineVars={PIPELINE_VARS}
+              agentVars={agentVars}
+            />
+
+            <TemplateField
+              label="Headers (JSON)"
+              placeholder='e.g. {"Authorization": "Bearer {{token}}"}'
+              value={(data.headers as string) || ""}
+              onChange={(v) => update("headers", v)}
+              pipelineVars={PIPELINE_VARS}
+              agentVars={agentVars}
+            />
+
+            <TemplateField
+              label="Body"
+              placeholder="Request body"
+              value={(data.body as string) || ""}
+              onChange={(v) => update("body", v)}
+              pipelineVars={PIPELINE_VARS}
+              agentVars={agentVars}
+            />
+
+            <Field label="Timeout (seconds)">
+              <Input
+                type="number"
+                value={(data.timeout as number) || 30}
+                onChange={(e) => update("timeout", Number(e.target.value))}
+                className="h-7 text-xs"
+                min={1}
+                max={120}
+              />
+            </Field>
+
+            <Field label="Store Result As">
+              <Input
+                value={(data.store_as as string) || ""}
+                onChange={(e) => update("store_as", e.target.value)}
+                className="h-7 text-xs"
+                placeholder="e.g. api_response"
+              />
+            </Field>
+
+            <Field label="Status Label">
+              <Input
+                value={(data.status_label as string) || ""}
+                onChange={(e) => update("status_label", e.target.value)}
+                className="h-7 text-xs"
+                placeholder="e.g. calling API"
+              />
+            </Field>
 
             <Separator />
 

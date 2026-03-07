@@ -17,6 +17,8 @@ const PIPELINE_VARS = [
 
 const NODE_OPTIONS = [
   { type: "claude_agent", label: "Agent" },
+  { type: "read_file", label: "Read File" },
+  { type: "http_request", label: "HTTP Request" },
   { type: "condition", label: "Condition" },
   { type: "end", label: "Done" },
   { type: "failed", label: "Failed" },
@@ -55,15 +57,23 @@ export function Toolbar({ nodes, onAddNode, onDeleteSelected, onAutoLayout, onEx
     )
   );
 
-  const ctxEntries = nodes
-    .filter((n) => n.type === "claude_agent")
-    .map((n) => ({
-      name: (n.data.name as string) || n.id,
-      outputs: ((n.data.outputs as { name: string }[]) || [])
-        .map((o) => o.name)
-        .filter(Boolean),
-    }))
-    .filter((e) => e.outputs.length > 0);
+  const ctxEntries = [
+    ...nodes
+      .filter((n) => n.type === "claude_agent")
+      .map((n) => ({
+        name: (n.data.name as string) || n.id,
+        outputs: ((n.data.outputs as { name: string }[]) || [])
+          .map((o) => o.name)
+          .filter(Boolean),
+      })),
+    ...nodes
+      .filter((n) => n.type === "read_file" || n.type === "http_request")
+      .filter((n) => n.data.store_as)
+      .map((n) => ({
+        name: (n.data.name as string) || n.id,
+        outputs: [n.data.store_as as string],
+      })),
+  ].filter((e) => e.outputs.length > 0);
 
   return (
     <div className="border-b border-border/50">

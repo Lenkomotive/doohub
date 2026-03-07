@@ -19,7 +19,7 @@ export function definitionToFlow(definition: PipelineTemplate["definition"]): {
   const nodes: Node[] = (definition.nodes || []).map((n) => {
     const data = { ...n };
     // Populate targets from edges so syncEdges in the builder doesn't wipe them
-    if (["start", "claude_agent", "end", "failed"].includes(n.type)) {
+    if (["start", "claude_agent", "end", "failed", "read_file", "http_request"].includes(n.type)) {
       if (!Array.isArray(data.targets) || data.targets.length === 0) {
         data.targets = edgesBySource[n.id] || [];
       }

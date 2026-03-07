@@ -6,6 +6,9 @@ class TemplateNode {
   final String? model;
   final String? statusLabel;
   final String? conditionField;
+  final String? filePath;
+  final String? url;
+  final String? method;
 
   TemplateNode({
     required this.id,
@@ -15,6 +18,9 @@ class TemplateNode {
     this.model,
     this.statusLabel,
     this.conditionField,
+    this.filePath,
+    this.url,
+    this.method,
   });
 
   factory TemplateNode.fromJson(Map<String, dynamic> json) {
@@ -26,6 +32,9 @@ class TemplateNode {
       model: json['model'] as String?,
       statusLabel: json['status_label'] as String?,
       conditionField: json['condition_field'] as String?,
+      filePath: json['file_path'] as String?,
+      url: json['url'] as String?,
+      method: json['method'] as String?,
     );
   }
 
