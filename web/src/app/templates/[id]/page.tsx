@@ -89,8 +89,25 @@ function BuilderContent() {
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((eds) => addEdge({ ...connection, type: "smoothstep" }, eds));
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id !== connection.source || !connection.target) return node;
+          const type = node.type;
+          if (type === "condition") {
+            const branches = (node.data.branches as { value: string; target: string }[]) || [];
+            if (branches.some((b) => b.target === connection.target)) return node;
+            return { ...node, data: { ...node.data, branches: [...branches, { value: "", target: connection.target }] } };
+          }
+          if (type === "start" || type === "claude_agent" || type === "failed") {
+            const targets = (node.data.targets as string[]) || [];
+            if (targets.includes(connection.target)) return node;
+            return { ...node, data: { ...node.data, targets: [...targets, connection.target] } };
+          }
+          return node;
+        }),
+      );
     },
-    [setEdges],
+    [setEdges, setNodes],
   );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
