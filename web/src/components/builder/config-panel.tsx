@@ -297,8 +297,12 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
                   type="checkbox"
                   checked={!!data.resume_self}
                   onChange={(e) => {
-                    update("resume_self", e.target.checked || undefined);
-                    if (e.target.checked) update("resume_from", undefined);
+                    const checked = e.target.checked;
+                    onUpdate(node.id, {
+                      ...data,
+                      resume_self: checked || undefined,
+                      ...(checked ? { resume_from: undefined } : {}),
+                    });
                   }}
                   className="rounded"
                 />
