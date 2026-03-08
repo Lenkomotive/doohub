@@ -177,7 +177,6 @@ async def _handle_condition(node: dict, ctx: dict) -> str | None:
     field = node.get("condition_field", "")
     value = ctx.get(field)
     branches = node.get("branches", {})
-    default = node.get("default_branch")
 
     # Branches can be a list [{value, target}] or dict {value: target}
     if isinstance(branches, list):
@@ -185,19 +184,26 @@ async def _handle_condition(node: dict, ctx: dict) -> str | None:
     else:
         branch_map = branches
 
-    # Iteration guard
+    # Iteration guard — uses explicit max_iterations_target
     max_iter = node.get("max_iterations")
     counter_field = node.get("iteration_counter", f"_iter_{node_id}")
     if max_iter is not None:
         count = ctx.get(counter_field, 0)
         if count >= max_iter:
+            target = node.get("max_iterations_target")
+            # Fall back to default_branch for backwards compat
+            if not target:
+                target = node.get("default_branch")
             logger.warning(
                 "Pipeline %s: %s max iterations (%d) reached → %s",
-                key, node_id, max_iter, default,
+                key, node_id, max_iter, target,
             )
-            return default
+            return target
 
-    next_node = branch_map.get(str(value), default) if value is not None else default
+    next_node = branch_map.get(str(value)) if value is not None else None
+    if next_node is None:
+        # Fall back to default_branch for backwards compat
+        next_node = node.get("default_branch")
     logger.info(
         "Pipeline %s: %s condition %s=%s → %s",
         key, node_id, field, value, next_node,
