@@ -2,10 +2,7 @@
 
 import type { NodeProps } from "@xyflow/react";
 import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
-
-function formatDuration(s: number): string {
-  return s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
-}
+import { formatDuration } from "@/lib/format-duration";
 
 const statusClasses: Record<string, string> = {
   running: "ring-2 ring-blue-500 ring-offset-1 animate-pulse",

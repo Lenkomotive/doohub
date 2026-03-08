@@ -1,42 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, AlertCircle } from "lucide-react";
-import { apiFetch } from "@/lib/api";
-import { usePipelinesStore } from "@/store/pipelines";
-
-interface Summary {
-  running: number;
-  completed: number;
-  failed: number;
-  total: number;
-}
+import { usePipelinesStore, isActive } from "@/store/pipelines";
+import { useMemo } from "react";
 
 export function MonitorBar() {
-  const [summary, setSummary] = useState<Summary | null>(null);
-
-  const fetchSummary = useCallback(async () => {
-    try {
-      const res = await apiFetch("/pipelines/summary");
-      if (res.ok) setSummary(await res.json());
-    } catch {
-      // silently ignore fetch errors
-    }
-  }, []);
-
-  // Poll every 30s
-  useEffect(() => {
-    fetchSummary();
-    const id = setInterval(fetchSummary, 30_000);
-    return () => clearInterval(id);
-  }, [fetchSummary]);
-
-  // Refetch when pipelines change via SSE
   const pipelines = usePipelinesStore((s) => s.pipelines);
-  useEffect(() => {
-    fetchSummary();
-  }, [pipelines, fetchSummary]);
+
+  const summary = useMemo(() => {
+    if (pipelines.length === 0) return null;
+    let running = 0;
+    let completed = 0;
+    let failed = 0;
+    for (const p of pipelines) {
+      if (isActive(p.status)) running++;
+      else if (p.status === "done" || p.status === "merged") completed++;
+      else if (p.status === "failed") failed++;
+    }
+    return { running, completed, failed, total: pipelines.length };
+  }, [pipelines]);
 
   if (!summary || summary.total === 0) return null;
 

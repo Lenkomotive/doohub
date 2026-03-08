@@ -14,6 +14,10 @@ export function useLiveTimer(
       return;
     }
     const start = new Date(startedAt).getTime();
+    if (isNaN(start)) {
+      setElapsed(null);
+      return;
+    }
     const tick = () => {
       const s = Math.floor((Date.now() - start) / 1000);
       setElapsed(

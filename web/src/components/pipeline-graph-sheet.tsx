@@ -30,6 +30,7 @@ import { EndNode } from "@/components/builder/end-node";
 import { ConditionNode } from "@/components/builder/condition-node";
 import { FailedNode } from "@/components/builder/failed-node";
 import type { Pipeline, StepLog } from "@/store/pipelines";
+import { formatDuration } from "@/lib/format-duration";
 
 const monitorNodeTypes = {
   start: withStatusOverlay(StartNode),
@@ -63,9 +64,7 @@ function StepEntry({ step }: { step: StepLog }) {
           <span className="text-xs font-medium truncate">{step.node_name}</span>
           {step.duration_s != null && (
             <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
-              {step.duration_s < 60
-                ? `${Math.round(step.duration_s)}s`
-                : `${Math.floor(step.duration_s / 60)}m ${Math.round(step.duration_s % 60)}s`}
+              {formatDuration(step.duration_s)}
             </span>
           )}
         </div>
@@ -101,6 +100,9 @@ export function PipelineGraphSheet({
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data?.definition) setTemplateDef(data.definition);
+        })
+        .catch(() => {
+          // Network error — leave templateDef as null
         });
     }
   }, [open, pipeline.template_id]);

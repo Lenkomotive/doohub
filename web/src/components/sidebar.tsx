@@ -43,7 +43,7 @@ export function Sidebar() {
 
       <nav className="flex flex-1 flex-col items-center gap-1">
         {navItems.map((item) => {
-          const isActive =
+          const isCurrentPage =
             pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
@@ -51,7 +51,7 @@ export function Sidebar() {
               href={item.href}
               title={item.label}
               className={`relative flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
-                isActive
+                isCurrentPage
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
               }`}

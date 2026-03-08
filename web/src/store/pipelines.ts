@@ -226,9 +226,9 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
             if (update.step) {
               const logs = [...(pipeline.step_logs || [])];
               const existingIdx = logs.findIndex((s) => s.node_id === update.step!.node_id);
-              if (existingIdx >= 0 && update.step.status !== "running") {
+              if (existingIdx >= 0) {
                 logs[existingIdx] = update.step;
-              } else if (existingIdx < 0) {
+              } else {
                 logs.push(update.step);
               }
               pipeline.step_logs = logs;
@@ -256,23 +256,23 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
   },
 }));
 
+const statusMatchers: Record<string, (status: string) => boolean> = {
+  running: (s) => isActive(s),
+  completed: (s) => s === "done" || s === "merged",
+  failed: (s) => s === "failed",
+  cancelled: (s) => s === "cancelled",
+};
+
 export function useFilteredPipelines() {
   const pipelines = usePipelinesStore((s) => s.pipelines);
   const filters = usePipelinesStore((s) => s.filters);
   return useMemo(() => {
     let result = pipelines;
     if (filters.status) {
-      result = result.filter((p) =>
-        filters.status === "running"
-          ? isActive(p.status)
-          : filters.status === "completed"
-            ? ["done", "merged"].includes(p.status)
-            : filters.status === "failed"
-              ? p.status === "failed"
-              : filters.status === "cancelled"
-                ? p.status === "cancelled"
-                : true,
-      );
+      const matcher = statusMatchers[filters.status];
+      if (matcher) {
+        result = result.filter((p) => matcher(p.status));
+      }
     }
     if (filters.search) {
       const q = filters.search.toLowerCase();
