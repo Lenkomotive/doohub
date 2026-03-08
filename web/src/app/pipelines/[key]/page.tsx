@@ -21,6 +21,7 @@ import {
   Play,
   Flag,
   SkipForward,
+  Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { AppShell } from "@/components/app-shell";
 import { usePipelinesStore, isActive } from "@/store/pipelines";
 import type { Pipeline, StepLog } from "@/store/pipelines";
+import { PipelineGraphSheet } from "@/components/pipeline-graph-sheet";
 
 const stepNodeIcon: Record<string, React.ElementType> = {
   start: Play,
@@ -92,6 +94,7 @@ function PipelineDetail() {
   const router = useRouter();
   const pipelineKey = params.key as string;
   const [planExpanded, setPlanExpanded] = useState(false);
+  const [graphOpen, setGraphOpen] = useState(false);
 
   const {
     pipelines,
@@ -192,6 +195,17 @@ function PipelineDetail() {
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {pipeline.template_id && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => setGraphOpen(true)}
+            >
+              <Workflow className="h-4 w-4 mr-1.5" />
+              Execution Graph
+            </Button>
+          )}
           {pipeline.pr_url && (
             <a href={pipeline.pr_url} target="_blank" rel="noopener noreferrer">
               <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -392,6 +406,15 @@ function PipelineDetail() {
             </CardContent>
           )}
         </Card>
+      )}
+
+      {/* Graph sheet */}
+      {pipeline.template_id && (
+        <PipelineGraphSheet
+          pipeline={pipeline}
+          open={graphOpen}
+          onClose={() => setGraphOpen(false)}
+        />
       )}
     </div>
   );

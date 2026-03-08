@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
 import { connectSSE } from "@/lib/sse";
@@ -29,6 +30,7 @@ export interface Pipeline {
   review_round: number;
   model: string;
   total_cost_usd: number;
+  template_id: number | null;
   step_logs: StepLog[];
   created_at: string;
   updated_at: string;
@@ -47,12 +49,19 @@ interface SSEConnection {
   close: () => void;
 }
 
+interface Filters {
+  status: string | null;
+  search: string;
+}
+
 interface PipelinesState {
   pipelines: Pipeline[];
   total: number;
   isLoading: boolean;
   sseConnection: SSEConnection | null;
   mergeStatuses: Record<string, MergeStatus>;
+  filters: Filters;
+  setFilters: (f: Partial<Filters>) => void;
   fetchPipelines: () => Promise<void>;
   createPipeline: (body: {
     repo_path: string;
@@ -81,6 +90,9 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
   isLoading: false,
   sseConnection: null,
   mergeStatuses: {},
+  filters: { status: null, search: "" },
+
+  setFilters: (f) => set((state) => ({ filters: { ...state.filters, ...f } })),
 
   fetchPipelines: async () => {
     set({ isLoading: true });
@@ -199,7 +211,7 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
 
     const conn = connectSSE("/pipelines/events", (event, data) => {
       if (event === "pipeline") {
-        const update = data as { pipeline_key: string; status: string; pr_url?: string; error?: string; step?: StepLog };
+        const update = data as { pipeline_key: string; status: string; pr_url?: string; error?: string; step?: StepLog; total_cost_usd?: number };
         set((state) => {
           const idx = state.pipelines.findIndex((p) => p.pipeline_key === update.pipeline_key);
           if (idx >= 0) {
@@ -208,6 +220,7 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
             pipeline.status = update.status;
             if (update.pr_url !== undefined) pipeline.pr_url = update.pr_url;
             if (update.error !== undefined) pipeline.error = update.error;
+            if (update.total_cost_usd !== undefined) pipeline.total_cost_usd = update.total_cost_usd;
 
             // Update step_logs from SSE step data
             if (update.step) {
@@ -242,3 +255,34 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
     }
   },
 }));
+
+export function useFilteredPipelines() {
+  const pipelines = usePipelinesStore((s) => s.pipelines);
+  const filters = usePipelinesStore((s) => s.filters);
+  return useMemo(() => {
+    let result = pipelines;
+    if (filters.status) {
+      result = result.filter((p) =>
+        filters.status === "running"
+          ? isActive(p.status)
+          : filters.status === "completed"
+            ? ["done", "merged"].includes(p.status)
+            : filters.status === "failed"
+              ? p.status === "failed"
+              : filters.status === "cancelled"
+                ? p.status === "cancelled"
+                : true,
+      );
+    }
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.issue_title?.toLowerCase().includes(q) ||
+          p.repo_path?.toLowerCase().includes(q) ||
+          p.task_description?.toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [pipelines, filters]);
+}

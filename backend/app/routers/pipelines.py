@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.auth import get_current_user, require_slave_api_key
@@ -91,6 +92,32 @@ async def list_pipelines(
     return {
         "pipelines": [_serialize(p) for p in pipelines],
         "total": len(pipelines),
+    }
+
+
+ACTIVE_STATUSES = {"starting", "running", "planning", "planned", "developing", "developed", "reviewing"}
+
+
+@router.get("/pipelines/summary")
+async def pipeline_summary(
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(Pipeline.status, func.count())
+        .filter(Pipeline.user_id == user.id)
+        .group_by(Pipeline.status)
+        .all()
+    )
+    counts = dict(rows)
+    running = sum(counts.get(s, 0) for s in ACTIVE_STATUSES)
+    completed = counts.get("done", 0) + counts.get("merged", 0)
+    failed = counts.get("failed", 0)
+    return {
+        "running": running,
+        "completed": completed,
+        "failed": failed,
+        "total": sum(counts.values()),
     }
 
 
@@ -272,6 +299,7 @@ async def pipeline_callback(
         event["pr_url"] = body.pr_url
     if body.error:
         event["error"] = body.error
+    event["total_cost_usd"] = pipeline.total_cost_usd
     await pipeline_events.publish(event)
 
     if body.status in ("done", "failed"):
@@ -312,6 +340,7 @@ def _serialize(p: Pipeline) -> dict:
         "review_round": p.review_round,
         "model": p.model,
         "total_cost_usd": p.total_cost_usd,
+        "template_id": p.template_id,
         "step_logs": p.step_logs or [],
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),

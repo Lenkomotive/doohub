@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAuthStore } from "@/store/auth";
+import { usePipelinesStore, isActive } from "@/store/pipelines";
 
 const navItems = [
   { href: "/sessions", label: "Sessions", icon: MessageSquare },
@@ -25,6 +26,9 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { logout } = useAuthStore();
+  const runningCount = usePipelinesStore(
+    (s) => s.pipelines.filter((p) => isActive(p.status)).length,
+  );
 
   return (
     <aside className="flex h-full w-14 shrink-0 flex-col items-center border-r border-border/50 bg-card/30 py-3">
@@ -46,13 +50,18 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               title={item.label}
-              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
+              className={`relative flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
                 isActive
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground"
               }`}
             >
               <item.icon className="h-4 w-4" />
+              {item.href === "/pipelines" && runningCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-500 text-[8px] font-medium text-white">
+                  {runningCount > 9 ? "9+" : runningCount}
+                </span>
+              )}
             </Link>
           );
         })}
