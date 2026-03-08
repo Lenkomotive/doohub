@@ -32,11 +32,33 @@ export function definitionToFlow(definition: PipelineTemplate["definition"]): {
     };
   });
 
+  // Build condition branch labels: source+target → label
+  const branchLabels: Record<string, string> = {};
+  const nodeMap: Record<string, (typeof definition.nodes)[number]> = {};
+  for (const n of definition.nodes || []) nodeMap[n.id] = n;
+  for (const n of definition.nodes || []) {
+    if (n.type !== "condition") continue;
+    const branches = n.branches;
+    if (Array.isArray(branches)) {
+      for (const b of branches as { value: string; target: string }[]) {
+        if (b.value && b.target) branchLabels[`${n.id}-${b.target}`] = b.value;
+      }
+    } else if (branches && typeof branches === "object") {
+      for (const [value, target] of Object.entries(branches as Record<string, string>)) {
+        branchLabels[`${n.id}-${target}`] = value;
+      }
+    }
+    if (n.max_iterations_target) {
+      branchLabels[`${n.id}-${n.max_iterations_target}`] = "MAX_ROUNDS";
+    }
+  }
+
   const edges: Edge[] = defEdges.map((e) => ({
     id: `e-${e.from}-${e.to}`,
     source: e.from,
     target: e.to,
     type: "smoothstep",
+    label: branchLabels[`${e.from}-${e.to}`] || undefined,
   }));
 
   return { nodes, edges };

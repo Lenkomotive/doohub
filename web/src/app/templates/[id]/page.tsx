@@ -127,7 +127,12 @@ function BuilderContent() {
 
       if (data.type === "condition" && Array.isArray(data.branches)) {
         const branches = data.branches as { value: string; target: string }[];
-        syncEdges(branches.map((b) => ({ target: b.target, label: b.value })));
+        const targets = branches.map((b) => ({ target: b.target, label: b.value }));
+        const maxIterTarget = data.max_iterations_target as string | undefined;
+        if (maxIterTarget) {
+          targets.push({ target: maxIterTarget, label: "MAX_ROUNDS" });
+        }
+        syncEdges(targets);
       }
     },
     [setNodes, setEdges],

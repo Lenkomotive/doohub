@@ -466,6 +466,42 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
                   Add branch
                 </Button>
               </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Label className="text-[10px] text-muted-foreground">Loop Guard</Label>
+                <Field label="Max Iterations">
+                  <Input
+                    type="number"
+                    value={(data.max_iterations as number) ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value ? Number(e.target.value) : undefined;
+                      update("max_iterations", val);
+                    }}
+                    className="h-7 text-xs"
+                    placeholder="No limit"
+                    min={1}
+                    max={10}
+                  />
+                </Field>
+                {(data.max_iterations as number) > 0 && (
+                  <Field label="When max reached →">
+                    <select
+                      value={(data.max_iterations_target as string) || ""}
+                      onChange={(e) => update("max_iterations_target", e.target.value || undefined)}
+                      className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+                    >
+                      <option value="">Select node…</option>
+                      {targetNodes.map((n) => (
+                        <option key={n.id} value={n.id}>
+                          {(n.data.name as string) || n.id}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </div>
             </>
           );
         })()}
