@@ -17,10 +17,11 @@ from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.log_buffer import log_buffer
+from app.core.schedule_poller import schedule_poller
 from app.core.slave_client import _session_event_consumer, slave
 from app.models.pipeline_template import PipelineTemplate
 from app.models.user import User
-from app.routers import auth, pipeline_templates, pipelines, sessions
+from app.routers import auth, pipeline_schedules, pipeline_templates, pipelines, sessions
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
@@ -146,11 +147,13 @@ def _seed_default_template() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _seed_default_template()
-    task = asyncio.create_task(_session_event_consumer())
+    session_task = asyncio.create_task(_session_event_consumer())
+    schedule_task = asyncio.create_task(schedule_poller())
     yield
-    task.cancel()
+    session_task.cancel()
+    schedule_task.cancel()
     try:
-        await task
+        await asyncio.gather(session_task, schedule_task)
     except asyncio.CancelledError:
         pass
 
@@ -198,6 +201,7 @@ app.include_router(auth.router)
 app.include_router(sessions.router)
 app.include_router(pipelines.router)
 app.include_router(pipeline_templates.router)
+app.include_router(pipeline_schedules.router)
 
 
 @app.get("/health")
