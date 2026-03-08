@@ -118,5 +118,14 @@ export function validateGraph(nodes: Node[], edges: Edge[]): ValidationResult {
     }
   }
 
+  // 7. Template node checks
+  for (const n of nodes) {
+    if (n.type !== "template") continue;
+    const name = (n.data.name as string) || n.id;
+    if (!n.data.template_id) {
+      errors.push({ nodeId: n.id, message: `${name}: no template selected` });
+    }
+  }
+
   return { valid: errors.length === 0, errors, traversalOrder };
 }

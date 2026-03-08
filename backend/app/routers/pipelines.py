@@ -23,6 +23,65 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["pipelines"])
 
 
+def _resolve_nested_templates(
+    db: DBSession,
+    definition: dict,
+    max_depth: int = 5,
+    _visited: set[int] | None = None,
+    _depth: int = 0,
+) -> dict[str, dict]:
+    """Recursively resolve all nested template definitions.
+
+    Returns a flat dict of {template_id_str: definition} for all referenced templates.
+    Detects circular references and enforces a max nesting depth.
+    """
+    if _depth >= max_depth:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nested template depth exceeds maximum of {max_depth}",
+        )
+
+    if _visited is None:
+        _visited = set()
+
+    result: dict[str, dict] = {}
+    template_nodes = [n for n in definition.get("nodes", []) if n.get("type") == "template"]
+
+    for node in template_nodes:
+        tid = node.get("template_id")
+        if not tid:
+            continue
+        tid_int = int(tid)
+
+        if tid_int in _visited:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Circular template reference detected (template_id={tid})",
+            )
+
+        if str(tid) in result:
+            continue
+
+        tpl = db.query(PipelineTemplate).filter(PipelineTemplate.id == tid_int).first()
+        if not tpl:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Nested template not found (template_id={tid})",
+            )
+
+        result[str(tid)] = tpl.definition
+
+        # Recurse into this template's definition
+        _visited.add(tid_int)
+        child_nested = _resolve_nested_templates(
+            db, tpl.definition, max_depth, _visited, _depth + 1,
+        )
+        result.update(child_nested)
+        _visited.discard(tid_int)
+
+    return result
+
+
 @router.post("/pipelines", status_code=201)
 async def create_pipeline(
     body: CreatePipelineRequest,
@@ -38,6 +97,9 @@ async def create_pipeline(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     template_definition = template.definition
+
+    # Pre-fetch nested template definitions (recursive, with cycle/depth detection)
+    nested_templates = _resolve_nested_templates(db, template_definition, max_depth=5)
 
     pipeline = Pipeline(
         user_id=user.id,
@@ -64,6 +126,7 @@ async def create_pipeline(
             model=body.model,
             callback_url=callback_url,
             template_definition=template_definition,
+            nested_templates=nested_templates,
         )
     except HTTPException:
         pipeline.status = "failed"
