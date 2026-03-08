@@ -62,6 +62,18 @@ async def cleanup_pipeline(pipeline_key: str, body: CleanupRequest):
     return {"status": "cleaned"}
 
 
+class ResolveConflictsRequest(BaseModel):
+    repo_path: str
+    branch: str
+    model: str = "claude-sonnet-4-6"
+
+
+@router.post("/{pipeline_key}/resolve-conflicts")
+async def resolve_conflicts(pipeline_key: str, body: ResolveConflictsRequest):
+    result = await orchestrator.resolve_conflicts(body.repo_path, body.branch, body.model)
+    return result
+
+
 @router.get("/merge-status")
 async def get_merge_status(repo_path: str, pr_number: int):
     result = await orchestrator.check_merge_status(repo_path, pr_number)

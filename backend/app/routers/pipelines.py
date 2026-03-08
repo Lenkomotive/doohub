@@ -279,6 +279,24 @@ async def merge_pipeline(
     return result
 
 
+@router.post("/pipelines/{pipeline_key}/resolve-conflicts")
+async def resolve_conflicts(
+    pipeline_key: str,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    pipeline = _get_user_pipeline(db, pipeline_key, user.id)
+    if pipeline.status != "done":
+        raise HTTPException(status_code=400, detail="Pipeline is not in done status")
+    if not pipeline.branch:
+        raise HTTPException(status_code=400, detail="Pipeline has no branch")
+
+    result = await slave.resolve_conflicts(
+        pipeline_key, pipeline.repo_path, pipeline.branch, pipeline.model,
+    )
+    return result
+
+
 # --- internal callback (slave -> backend) ---
 
 

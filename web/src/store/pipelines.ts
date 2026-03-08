@@ -69,6 +69,7 @@ interface PipelinesState {
   deletePipeline: (key: string) => Promise<void>;
   checkMergeStatus: (key: string) => Promise<void>;
   mergePipeline: (key: string) => Promise<void>;
+  resolveConflicts: (key: string) => Promise<void>;
   connectSSE: () => void;
   disconnectSSE: () => void;
 }
@@ -192,6 +193,39 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
         mergeStatuses: {
           ...state.mergeStatuses,
           [key]: { ...(state.mergeStatuses[key] || { mergeable: false, has_conflicts: false, already_merged: false, checking: false }), merging: false, error: "Merge request failed" },
+        },
+      }));
+    }
+  },
+
+  resolveConflicts: async (key) => {
+    set((state) => ({
+      mergeStatuses: {
+        ...state.mergeStatuses,
+        [key]: { ...(state.mergeStatuses[key] || { mergeable: false, has_conflicts: false, already_merged: false, checking: false, merging: false, error: null }), resolvingConflicts: true },
+      },
+    }));
+    const res = await apiFetch(`/pipelines/${key}/resolve-conflicts`, { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        // Re-check merge status after resolution
+        await get().checkMergeStatus(key);
+      } else {
+        set((state) => ({
+          mergeStatuses: {
+            ...state.mergeStatuses,
+            [key]: { ...(state.mergeStatuses[key] || { mergeable: false, has_conflicts: false, already_merged: false, checking: false, merging: false }), resolvingConflicts: false, error: data.error || "Conflict resolution failed" },
+          },
+        }));
+      }
+    } else {
+      let detail = "Resolve conflicts failed";
+      try { const err = await res.json(); if (err.detail) detail = err.detail; } catch {}
+      set((state) => ({
+        mergeStatuses: {
+          ...state.mergeStatuses,
+          [key]: { ...(state.mergeStatuses[key] || { mergeable: false, has_conflicts: false, already_merged: false, checking: false, merging: false }), resolvingConflicts: false, error: detail },
         },
       }));
     }

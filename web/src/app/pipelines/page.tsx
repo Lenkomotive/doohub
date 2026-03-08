@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GitBranch, Activity, CheckCircle2, XCircle as XCircleIcon, Ban } from "lucide-react";
-import { apiFetch } from "@/lib/api";
 import { AppShell } from "@/components/app-shell";
 import { PipelineCard } from "@/components/pipeline-card";
 import { CreatePipelineDialog } from "@/components/create-pipeline-dialog";
@@ -18,7 +17,7 @@ function PipelinesContent() {
   const {
     pipelines, total, isLoading, mergeStatuses,
     fetchPipelines, cancelPipeline, deletePipeline,
-    checkMergeStatus, mergePipeline,
+    checkMergeStatus, mergePipeline, resolveConflicts,
     connectSSE, disconnectSSE,
   } = usePipelinesStore();
 
@@ -35,25 +34,6 @@ function PipelinesContent() {
   const handleMerge = useCallback((key: string) => {
     mergePipeline(key);
   }, [mergePipeline]);
-
-  const handleResolveConflicts = useCallback(async (pipeline: (typeof pipelines)[0]) => {
-    const key = pipeline.pipeline_key;
-    usePipelinesStore.setState((s) => ({
-      mergeStatuses: { ...s.mergeStatuses, [key]: { ...s.mergeStatuses[key]!, resolvingConflicts: true } },
-    }));
-    try {
-      const res = await apiFetch("/sessions", {
-        method: "POST",
-        body: JSON.stringify({ model: pipeline.model, project_path: pipeline.repo_path }),
-      });
-      const { session_key } = await res.json();
-      router.push(`/sessions/${session_key}`);
-    } catch {
-      usePipelinesStore.setState((s) => ({
-        mergeStatuses: { ...s.mergeStatuses, [key]: { ...s.mergeStatuses[key]!, resolvingConflicts: false } },
-      }));
-    }
-  }, [router]);
 
   // Counts for summary bar
   const counts = useMemo(() => {
@@ -150,7 +130,7 @@ function PipelinesContent() {
               onDelete={() => deletePipeline(pipeline.pipeline_key)}
               onCheckMergeStatus={() => handleCheckMergeStatus(pipeline.pipeline_key)}
               onMerge={() => handleMerge(pipeline.pipeline_key)}
-              onResolveConflicts={() => handleResolveConflicts(pipeline)}
+              onResolveConflicts={() => resolveConflicts(pipeline.pipeline_key)}
             />
           ))}
         </div>

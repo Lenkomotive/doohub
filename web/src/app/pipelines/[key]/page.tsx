@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { AppShell } from "@/components/app-shell";
-import { apiFetch } from "@/lib/api";
 import { usePipelinesStore, isActive } from "@/store/pipelines";
 import type { Pipeline, StepLog } from "@/store/pipelines";
 
@@ -101,6 +100,7 @@ function PipelineDetail() {
     deletePipeline,
     checkMergeStatus,
     mergePipeline,
+    resolveConflicts,
     connectSSE,
     disconnectSSE,
   } = usePipelinesStore();
@@ -138,26 +138,7 @@ function PipelineDetail() {
   };
 
   const handleResolveConflicts = async () => {
-    if (!pipeline) return;
-    const statusKey = pipelineKey;
-    usePipelinesStore.setState((s) => ({
-      mergeStatuses: { ...s.mergeStatuses, [statusKey]: { ...s.mergeStatuses[statusKey]!, resolvingConflicts: true } },
-    }));
-    try {
-      const res = await apiFetch("/sessions", {
-        method: "POST",
-        body: JSON.stringify({
-          model: pipeline.model,
-          project_path: pipeline.repo_path,
-        }),
-      });
-      const { session_key } = await res.json();
-      router.push(`/sessions/${session_key}`);
-    } catch {
-      usePipelinesStore.setState((s) => ({
-        mergeStatuses: { ...s.mergeStatuses, [statusKey]: { ...s.mergeStatuses[statusKey]!, resolvingConflicts: false } },
-      }));
-    }
+    await resolveConflicts(pipelineKey);
   };
 
   if (pipelines.length === 0) {

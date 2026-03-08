@@ -186,6 +186,14 @@ class SlaveClient:
             "pr_number": pr_number,
         })
 
+    async def resolve_conflicts(
+        self, pipeline_key: str, repo_path: str, branch: str, model: str,
+    ) -> Any:
+        return await self._request(
+            "POST", f"/api/orchestrate/{pipeline_key}/resolve-conflicts",
+            json={"repo_path": repo_path, "branch": branch, "model": model},
+        )
+
     async def list_issues(self, repo_path: str, per_page: int = 30, cursor: str | None = None) -> Any:
         params: dict = {"repo_path": repo_path, "per_page": per_page}
         if cursor:

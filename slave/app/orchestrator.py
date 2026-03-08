@@ -253,6 +253,90 @@ async def check_merge_status(repo_path: str, pr_number: int) -> dict:
     }
 
 
+async def resolve_conflicts(repo_path: str, branch: str, model: str = "claude-sonnet-4-6") -> dict:
+    """Rebase a PR branch onto main, using Claude to resolve any conflicts."""
+    from app.claude_runner import run_prompt
+
+    await _run_git(repo_path, "fetch", "origin")
+
+    # Create a temporary worktree for the rebase
+    slug = re.sub(r"[^a-z0-9]+", "-", branch.lower()).strip("-")[:40]
+    worktree_path = str(WORKTREE_DIR / f"resolve-{slug}")
+
+    if Path(worktree_path).exists():
+        shutil.rmtree(worktree_path)
+
+    WORKTREE_DIR.mkdir(parents=True, exist_ok=True)
+
+    code, _, err = await _run_git(repo_path, "worktree", "add", worktree_path, branch)
+    if code != 0:
+        return {"success": False, "error": f"Failed to checkout branch: {err}"}
+
+    try:
+        # Try rebase onto main
+        code, out, err = await _run_git(worktree_path, "rebase", "origin/main")
+        if code == 0:
+            # No conflicts — push the rebased branch
+            code, _, err = await _run_git(worktree_path, "push", "--force-with-lease", "origin", branch)
+            if code != 0:
+                return {"success": False, "error": f"Push failed: {err}"}
+            return {"success": True, "message": "Rebased cleanly, no conflicts"}
+
+        # There are conflicts — let Claude resolve them
+        max_rounds = 10
+        for round_num in range(max_rounds):
+            # Get list of conflicted files
+            _, status_out, _ = await _run_git(worktree_path, "diff", "--name-only", "--diff-filter=U")
+            conflicted_files = [f for f in status_out.strip().split("\n") if f]
+
+            if not conflicted_files:
+                # No more conflicts, continue rebase
+                code, _, err = await _run_git(worktree_path, "rebase", "--continue")
+                if code == 0:
+                    break
+                # More conflicts from next commit
+                continue
+
+            prompt = (
+                "There are merge conflicts from a git rebase that need resolving. "
+                "Fix ALL conflict markers in the following files. Keep the intent of BOTH sides "
+                "— the branch changes AND the main branch updates. Do NOT leave any conflict markers "
+                "(<<<<<<, ======, >>>>>>) in the files.\n\n"
+                f"Conflicted files: {', '.join(conflicted_files)}"
+            )
+
+            result = await run_prompt(
+                prompt=prompt,
+                project_path=worktree_path,
+                model=model,
+                timeout=300,
+            )
+
+            if result.get("type") == "error":
+                await _run_git(worktree_path, "rebase", "--abort")
+                return {"success": False, "error": f"Claude failed: {result.get('error', 'unknown')}"}
+
+            # Stage resolved files and continue rebase
+            await _run_git(worktree_path, "add", "--all")
+            code, _, err = await _run_git(worktree_path, "-c", "core.editor=true", "rebase", "--continue")
+            if code == 0:
+                break
+            # If rebase --continue fails, there may be more commits with conflicts — loop again
+        else:
+            await _run_git(worktree_path, "rebase", "--abort")
+            return {"success": False, "error": "Too many conflict rounds, aborted"}
+
+        # Push the resolved branch
+        code, _, err = await _run_git(worktree_path, "push", "--force-with-lease", "origin", branch)
+        if code != 0:
+            return {"success": False, "error": f"Push failed: {err}"}
+
+        return {"success": True, "message": "Conflicts resolved and pushed"}
+
+    finally:
+        await _cleanup_worktree(repo_path, worktree_path)
+
+
 async def merge_pr(repo_path: str, pr_number: int) -> dict:
     """Merge a PR using squash merge and delete the branch."""
     code, out = await _run_gh(
