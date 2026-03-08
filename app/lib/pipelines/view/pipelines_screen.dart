@@ -139,6 +139,14 @@ class _PipelineTile extends StatelessWidget {
                     Text(pipeline.model, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   ],
                 ),
+                if (pipeline.templateName != null)
+                  Row(
+                    children: [
+                      const Icon(Icons.dashboard_outlined, size: 12, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(pipeline.templateName!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
                 Row(
                   children: [
                     const Icon(Icons.folder_outlined, size: 12, color: Colors.grey),

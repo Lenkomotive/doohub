@@ -312,6 +312,8 @@ def _serialize(p: Pipeline) -> dict:
         "review_round": p.review_round,
         "model": p.model,
         "total_cost_usd": p.total_cost_usd,
+        "template_id": p.template_id,
+        "template_name": p.template.name if p.template else None,
         "step_logs": p.step_logs or [],
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),

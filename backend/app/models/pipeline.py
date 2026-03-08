@@ -2,7 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -31,6 +31,7 @@ class Pipeline(Base):
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("pipeline_templates.id"), nullable=True
     )
+    template = relationship("PipelineTemplate", lazy="joined")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

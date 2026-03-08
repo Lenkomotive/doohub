@@ -98,6 +98,7 @@ export function PipelineCard({
       </CardHeader>
       <CardContent className="flex items-center gap-3 text-xs text-muted-foreground">
         <span>{repoName}</span>
+        {pipeline.template_name && <span>{pipeline.template_name}</span>}
         <span>{pipeline.model}</span>
         {pipeline.total_cost_usd > 0 && (
           <span>${pipeline.total_cost_usd.toFixed(2)}</span>

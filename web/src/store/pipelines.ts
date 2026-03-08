@@ -28,6 +28,8 @@ export interface Pipeline {
   error: string | null;
   review_round: number;
   model: string;
+  template_id: number | null;
+  template_name: string | null;
   total_cost_usd: number;
   step_logs: StepLog[];
   created_at: string;
