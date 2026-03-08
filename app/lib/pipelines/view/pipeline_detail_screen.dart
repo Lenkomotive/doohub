@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/pipeline.dart';
+import '../../sessions/bloc/sessions_cubit.dart';
 import '../../sessions/view/markdown_message.dart';
 import '../bloc/pipelines_cubit.dart';
 import '../bloc/pipelines_state.dart' show MergeStatus, PipelinesState;
@@ -84,6 +86,7 @@ class _PipelineDetailScreenState extends State<PipelineDetailScreen> {
                   mergeStatus: mergeStatus,
                   isMerging: isMerging,
                   prUrl: pipeline.prUrl!,
+                  pipeline: pipeline,
                 ),
               ],
               if (pipeline.error != null) ...[
@@ -277,21 +280,54 @@ class _PrCard extends StatelessWidget {
   }
 }
 
-class _MergeCard extends StatelessWidget {
+class _MergeCard extends StatefulWidget {
   final String pipelineKey;
   final MergeStatus? mergeStatus;
   final bool isMerging;
   final String prUrl;
+  final Pipeline pipeline;
 
   const _MergeCard({
     required this.pipelineKey,
     required this.mergeStatus,
     required this.isMerging,
     required this.prUrl,
+    required this.pipeline,
   });
 
   @override
+  State<_MergeCard> createState() => _MergeCardState();
+}
+
+class _MergeCardState extends State<_MergeCard> {
+  bool _creatingSession = false;
+
+  Future<void> _resolveConflicts() async {
+    setState(() => _creatingSession = true);
+    try {
+      final sessionKey = await context.read<SessionsCubit>().createSession(
+        projectPath: widget.pipeline.repoPath,
+        model: widget.pipeline.model,
+      );
+      if (mounted) {
+        context.push('/sessions/$sessionKey');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create session: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _creatingSession = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final mergeStatus = widget.mergeStatus;
+    final pipelineKey = widget.pipelineKey;
+
     if (mergeStatus == null) {
       return const Card(
         child: Padding(
@@ -307,11 +343,11 @@ class _MergeCard extends StatelessWidget {
       );
     }
 
-    if (mergeStatus!.error != null) {
+    if (mergeStatus.error != null) {
       return Card(
         child: ListTile(
           leading: const Icon(Icons.error_outline, color: Colors.red),
-          title: Text(mergeStatus!.error!, style: const TextStyle(fontSize: 13, color: Colors.red)),
+          title: Text(mergeStatus.error!, style: const TextStyle(fontSize: 13, color: Colors.red)),
           trailing: TextButton(
             onPressed: () => context.read<PipelinesCubit>().checkMergeStatus(pipelineKey),
             child: const Text('Retry'),
@@ -320,7 +356,7 @@ class _MergeCard extends StatelessWidget {
       );
     }
 
-    if (mergeStatus!.alreadyMerged) {
+    if (mergeStatus.alreadyMerged) {
       return Card(
         child: ListTile(
           leading: const Icon(Icons.check_circle, color: Colors.green),
@@ -329,7 +365,7 @@ class _MergeCard extends StatelessWidget {
       );
     }
 
-    if (mergeStatus!.closed) {
+    if (mergeStatus.closed) {
       return Card(
         child: ListTile(
           leading: const Icon(Icons.cancel, color: Colors.grey),
@@ -338,7 +374,7 @@ class _MergeCard extends StatelessWidget {
       );
     }
 
-    if (mergeStatus!.hasConflicts) {
+    if (mergeStatus.hasConflicts) {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -347,9 +383,11 @@ class _MergeCard extends StatelessWidget {
             children: [
               FilledButton.icon(
                 style: FilledButton.styleFrom(backgroundColor: Colors.orange),
-                icon: const Icon(Icons.warning_amber_rounded),
-                label: const Text('Resolve Conflicts'),
-                onPressed: () => launchUrl(Uri.parse('$prUrl/conflicts')),
+                icon: _creatingSession
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.warning_amber_rounded),
+                label: Text(_creatingSession ? 'Starting session...' : 'Resolve Conflicts'),
+                onPressed: _creatingSession ? null : _resolveConflicts,
               ),
               const SizedBox(height: 8),
               TextButton(
@@ -369,11 +407,11 @@ class _MergeCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: FilledButton.icon(
           style: FilledButton.styleFrom(backgroundColor: Colors.green),
-          icon: isMerging
+          icon: widget.isMerging
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Icon(Icons.merge),
-          label: Text(isMerging ? 'Merging...' : 'Merge'),
-          onPressed: isMerging
+          label: Text(widget.isMerging ? 'Merging...' : 'Merge'),
+          onPressed: widget.isMerging
               ? null
               : () => context.read<PipelinesCubit>().mergePipeline(pipelineKey),
         ),

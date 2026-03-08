@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { AppShell } from "@/components/app-shell";
+import { apiFetch } from "@/lib/api";
 import { usePipelinesStore, isActive } from "@/store/pipelines";
 import type { Pipeline, StepLog } from "@/store/pipelines";
 
@@ -136,6 +137,29 @@ function PipelineDetail() {
     await mergePipeline(pipelineKey);
   };
 
+  const handleResolveConflicts = async () => {
+    if (!pipeline) return;
+    const statusKey = pipelineKey;
+    usePipelinesStore.setState((s) => ({
+      mergeStatuses: { ...s.mergeStatuses, [statusKey]: { ...s.mergeStatuses[statusKey]!, resolvingConflicts: true } },
+    }));
+    try {
+      const res = await apiFetch("/sessions", {
+        method: "POST",
+        body: JSON.stringify({
+          model: pipeline.model,
+          project_path: pipeline.repo_path,
+        }),
+      });
+      const { session_key } = await res.json();
+      router.push(`/sessions/${session_key}`);
+    } catch {
+      usePipelinesStore.setState((s) => ({
+        mergeStatuses: { ...s.mergeStatuses, [statusKey]: { ...s.mergeStatuses[statusKey]!, resolvingConflicts: false } },
+      }));
+    }
+  };
+
   if (pipelines.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -163,8 +187,6 @@ function PipelineDetail() {
     pipeline.task_description ||
     `Pipeline ${pipeline.pipeline_key}`;
   const repoName = pipeline.repo_path.split("/").pop() || pipeline.repo_path;
-  const prConflictsUrl = pipeline.pr_url ? `${pipeline.pr_url}/conflicts` : null;
-
   return (
     <div className="p-6 max-w-3xl mx-auto">
       {/* Header */}
@@ -283,12 +305,19 @@ function PipelineDetail() {
             {!mergeStatus.checking && mergeStatus.already_merged && (
               <span className="text-sm text-muted-foreground">Already merged</span>
             )}
-            {!mergeStatus.checking && mergeStatus.has_conflicts && prConflictsUrl && (
-              <a href={prConflictsUrl} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm" className="border-orange-500 text-orange-500 hover:bg-orange-500/10">
-                  Resolve Conflicts
-                </Button>
-              </a>
+            {!mergeStatus.checking && mergeStatus.has_conflicts && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-orange-500 text-orange-500 hover:bg-orange-500/10"
+                disabled={mergeStatus.resolvingConflicts}
+                onClick={handleResolveConflicts}
+              >
+                {mergeStatus.resolvingConflicts ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                {mergeStatus.resolvingConflicts ? "Starting session..." : "Resolve Conflicts"}
+              </Button>
             )}
             {!mergeStatus.checking && mergeStatus.mergeable && !mergeStatus.has_conflicts && (
               <Button
