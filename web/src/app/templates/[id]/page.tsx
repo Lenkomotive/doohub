@@ -368,6 +368,27 @@ function BuilderContent() {
 
   const handleSave = useCallback(async () => {
     if (!template) return;
+
+    // Validate before saving — block if errors
+    const result = validateGraph(nodes, edges);
+    if (!result.valid) {
+      setCompileErrors(result.errors);
+      const errorIds = new Set(result.errors.map((e) => e.nodeId).filter(Boolean));
+      setNodes((nds) =>
+        nds.map((n) => ({ ...n, className: errorIds.has(n.id) ? "compile-error" : undefined })),
+      );
+      setEdges((eds) =>
+        eds.map((e) => ({ ...e, className: errorIds.has(e.source) || errorIds.has(e.target) ? "compile-error" : undefined })),
+      );
+      return;
+    }
+
+    // Clear any previous errors
+    setCompileErrors(null);
+    setError("");
+    setNodes((nds) => nds.map((n) => ({ ...n, className: undefined })));
+    setEdges((eds) => eds.map((e) => ({ ...e, className: undefined })));
+
     setSaving(true);
     try {
       const definition = flowToDefinition(nodes, edges, {
@@ -382,7 +403,7 @@ function BuilderContent() {
       setTimeout(() => setError(""), 5000);
     }
     setSaving(false);
-  }, [template, nodes, edges, templateId, updateTemplate]);
+  }, [template, nodes, edges, templateId, updateTemplate, setNodes, setEdges]);
 
   // Autosave 5s after last change
   const initialLoad = useRef(true);
