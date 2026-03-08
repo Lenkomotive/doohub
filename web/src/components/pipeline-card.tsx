@@ -183,6 +183,8 @@ export function PipelineCard({
             <span>{pipeline.template_name}</span>
           </>
         )}
+        <span className="text-border">·</span>
+        <span>{pipeline.model}</span>
         {steps.length > 0 && (
           <>
             <span className="text-border">·</span>

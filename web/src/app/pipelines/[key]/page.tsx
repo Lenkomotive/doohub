@@ -225,6 +225,12 @@ function PipelineDetail() {
               <span className="text-muted-foreground">Repository</span>
               <p className="font-medium">{repoName}</p>
             </div>
+            {pipeline.template_name && (
+              <div>
+                <span className="text-muted-foreground">Template</span>
+                <p className="font-medium">{pipeline.template_name}</p>
+              </div>
+            )}
             <div>
               <span className="text-muted-foreground">Created</span>
               <p className="font-medium">{new Date(pipeline.created_at).toLocaleString()}</p>

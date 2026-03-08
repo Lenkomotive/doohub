@@ -183,7 +183,7 @@ class _InfoCard extends StatelessWidget {
             _row(Icons.folder_outlined, 'Repo', pipeline.repoPath.split('/').last),
             _row(Icons.memory, 'Model', pipeline.model),
             if (pipeline.templateName != null)
-              _row(Icons.description_outlined, 'Template', pipeline.templateName!),
+              _row(Icons.dashboard_outlined, 'Template', pipeline.templateName!),
             if (pipeline.issueNumber != null)
               _row(Icons.bug_report_outlined, 'Issue', '#${pipeline.issueNumber}'),
             if (pipeline.branch != null)
