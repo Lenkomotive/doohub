@@ -50,7 +50,7 @@ function PipelinesContent() {
           <p className="text-sm text-muted-foreground">No pipelines</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-3 grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
           {pipelines.map((pipeline) => (
             <PipelineCard
               key={pipeline.pipeline_key}

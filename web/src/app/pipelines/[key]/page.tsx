@@ -13,44 +13,13 @@ import {
   XCircle,
   ChevronDown,
   ChevronRight,
-  CheckCircle2,
-  Circle,
-  AlertCircle,
-  Bot,
-  GitFork,
-  Play,
-  Flag,
-  SkipForward,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { AppShell } from "@/components/app-shell";
 import { usePipelinesStore, isActive } from "@/store/pipelines";
-import type { Pipeline, StepLog } from "@/store/pipelines";
-
-const stepNodeIcon: Record<string, React.ElementType> = {
-  start: Play,
-  end: Flag,
-  failed: AlertCircle,
-  claude_agent: Bot,
-  condition: GitFork,
-};
-
-const stepStatusIcon = (status: string) => {
-  switch (status) {
-    case "completed":
-      return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-    case "running":
-      return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
-    case "failed":
-      return <AlertCircle className="h-4 w-4 text-destructive" />;
-    case "skipped":
-      return <SkipForward className="h-4 w-4 text-muted-foreground" />;
-    default:
-      return <Circle className="h-3.5 w-3.5 text-muted-foreground" />;
-  }
-};
+import { PipelineActivity } from "@/components/pipeline-activity";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   planning: "default",
@@ -63,29 +32,6 @@ const statusVariant: Record<string, "default" | "secondary" | "destructive" | "o
   failed: "destructive",
   cancelled: "secondary",
 };
-
-function StepOutput({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const isLong = text.length > 120;
-  if (!isLong) {
-    return <p className="text-xs text-muted-foreground mt-1 truncate">{text}</p>;
-  }
-  return (
-    <div className="mt-1">
-      <button
-        className="text-xs text-muted-foreground hover:text-foreground/70 truncate block w-full text-left"
-        onClick={() => setExpanded(!expanded)}
-      >
-        {expanded ? "▾ collapse" : text}
-      </button>
-      {expanded && (
-        <div className="mt-2 text-xs prose prose-sm prose-invert max-w-none rounded-md bg-muted/50 p-3 max-h-96 overflow-y-auto">
-          <Markdown>{text}</Markdown>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function PipelineDetail() {
   const params = useParams();
@@ -336,36 +282,7 @@ function PipelineDetail() {
             <h3 className="text-sm font-medium">Steps</h3>
           </CardHeader>
           <CardContent>
-            <div className="space-y-0">
-              {pipeline.step_logs.map((step, i) => {
-                const NodeIcon = stepNodeIcon[step.node_type] || Circle;
-                return (
-                  <div key={`${step.node_id}-${i}`} className="flex items-start gap-3 py-2 border-b border-border/30 last:border-0">
-                    <div className="mt-0.5 shrink-0">{stepStatusIcon(step.status)}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <NodeIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-sm font-medium truncate">{step.node_name}</span>
-                        <span className="text-xs text-muted-foreground">{step.node_type}</span>
-                        {step.duration_s != null && (
-                          <span className="text-xs text-muted-foreground ml-auto shrink-0">
-                            {step.duration_s < 60
-                              ? `${step.duration_s}s`
-                              : `${Math.floor(step.duration_s / 60)}m ${Math.round(step.duration_s % 60)}s`}
-                          </span>
-                        )}
-                      </div>
-                      {step.output && (
-                        <StepOutput text={step.output} />
-                      )}
-                      {step.error && (
-                        <p className="text-xs text-destructive mt-1">{step.error}</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <PipelineActivity steps={pipeline.step_logs} />
           </CardContent>
         </Card>
       )}
