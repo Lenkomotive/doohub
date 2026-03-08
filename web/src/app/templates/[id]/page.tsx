@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ReactFlow,
@@ -23,12 +23,14 @@ import { useTemplatesStore } from "@/store/templates";
 import { apiFetch } from "@/lib/api";
 import { definitionToFlow, flowToDefinition } from "@/lib/template-flow";
 import { autoLayout } from "@/lib/auto-layout";
+import { validateGraph, type ValidationError } from "@/lib/validate-graph";
 import { StartNode } from "@/components/builder/start-node";
 import { EndNode } from "@/components/builder/end-node";
 import { FailedNode } from "@/components/builder/failed-node";
 import { AgentNode } from "@/components/builder/agent-node";
 import { ConditionNode } from "@/components/builder/condition-node";
 import { ConfigPanel } from "@/components/builder/config-panel";
+import { ContextPanel } from "@/components/builder/context-panel";
 import { Toolbar } from "@/components/builder/toolbar";
 import type { PipelineTemplate } from "@/store/templates";
 
@@ -64,6 +66,7 @@ function BuilderContent() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [showContext, setShowContext] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -96,6 +99,10 @@ function BuilderContent() {
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
+  }, []);
+
+  const handleToggleContext = useCallback(() => {
+    setShowContext((prev) => !prev);
   }, []);
 
   const handleNodeUpdate = useCallback(
@@ -207,6 +214,53 @@ function BuilderContent() {
     URL.revokeObjectURL(url);
   }, [template, nodes, edges]);
 
+  // ── Compile ──────────────────────────────────────────────────────
+  const [compileErrors, setCompileErrors] = useState<ValidationError[] | null>(null);
+  const compileTimers = useRef<number[]>([]);
+
+  const clearCompile = useCallback(() => {
+    compileTimers.current.forEach(clearTimeout);
+    compileTimers.current = [];
+    setNodes((nds) => nds.map((n) => ({ ...n, className: undefined })));
+    setEdges((eds) => eds.map((e) => ({ ...e, className: undefined })));
+    setCompileErrors(null);
+  }, [setNodes, setEdges]);
+
+  const handleCompile = useCallback(() => {
+    clearCompile();
+    const result = validateGraph(nodes, edges);
+
+    if (result.valid) {
+      setCompileErrors(null);
+      const order = result.traversalOrder;
+      order.forEach((nodeId, i) => {
+        const t = window.setTimeout(() => {
+          setNodes((nds) =>
+            nds.map((n) => (n.id === nodeId ? { ...n, className: "compile-valid" } : n)),
+          );
+          setEdges((eds) =>
+            eds.map((e) => (e.source === nodeId ? { ...e, className: "compile-valid" } : e)),
+          );
+        }, i * 150);
+        compileTimers.current.push(t);
+      });
+      // Clear after animation + hold
+      const t = window.setTimeout(clearCompile, order.length * 150 + 3000);
+      compileTimers.current.push(t);
+    } else {
+      setCompileErrors(result.errors);
+      const errorIds = new Set(result.errors.map((e) => e.nodeId).filter(Boolean));
+      setNodes((nds) =>
+        nds.map((n) => ({ ...n, className: errorIds.has(n.id) ? "compile-error" : undefined })),
+      );
+      setEdges((eds) =>
+        eds.map((e) => ({ ...e, className: errorIds.has(e.source) || errorIds.has(e.target) ? "compile-error" : undefined })),
+      );
+      const t = window.setTimeout(clearCompile, 5000);
+      compileTimers.current.push(t);
+    }
+  }, [nodes, edges, setNodes, setEdges, clearCompile]);
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
 
   const handleSave = useCallback(async () => {
@@ -284,7 +338,11 @@ function BuilderContent() {
         onDeleteSelected={handleDeleteSelected}
         onAutoLayout={handleAutoLayout}
         onExportJson={handleExportJson}
+        onCompile={handleCompile}
+        onToggleContext={handleToggleContext}
         hasSelection={selectedNodeId !== null}
+        showContext={showContext}
+        compileErrors={compileErrors}
       />
 
       {/* Canvas + Config Panel */}
@@ -313,6 +371,9 @@ function BuilderContent() {
             onUpdate={handleNodeUpdate}
             onClose={() => setSelectedNodeId(null)}
           />
+        )}
+        {showContext && (
+          <ContextPanel nodes={nodes} onClose={() => setShowContext(false)} />
         )}
       </div>
     </div>

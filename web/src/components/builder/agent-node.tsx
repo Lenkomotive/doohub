@@ -5,7 +5,7 @@ import { Bot } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 function sessionBorderClass(data: Record<string, unknown>, selected: boolean): string {
-  if (selected) return "border-primary ring-1 ring-primary/30";
+  if (selected) return "border-emerald-500 ring-1 ring-emerald-500/30";
   if (data.resume_self) return "border-amber-500 ring-1 ring-amber-500/30";
   if (data.resume_from) return "border-violet-500 ring-1 ring-violet-500/30";
   return "border-border/50";

@@ -164,7 +164,17 @@ async def _handle_claude_agent(node: dict, ctx: dict) -> str | None:
             ctx[f"_session_{node_id}"] = result["session_id"]
         ctx["cost_usd"] = ctx.get("cost_usd", 0) + (result.get("cost_usd") or 0)
 
-        return result.get("result", "")
+        text = result.get("result", "")
+
+        # Auto-detect PR URL in agent output
+        if not ctx.get("pr_url"):
+            pr_match = re.search(r"https://github\.com/[^\s)]+/pull/(\d+)", text)
+            if pr_match:
+                ctx["pr_url"] = pr_match.group(0)
+                ctx["pr_number"] = int(pr_match.group(1))
+                logger.info("Pipeline %s: %s detected PR %s", key, node_id, ctx["pr_url"])
+
+        return text
 
     return None
 

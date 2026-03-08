@@ -2,18 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Node } from "@xyflow/react";
-import { Braces, Download, LayoutGrid, Plus, Trash2 } from "lucide-react";
+import { Braces, Download, LayoutGrid, Plus, Trash2, Zap } from "lucide-react";
+import type { ValidationError } from "@/lib/validate-graph";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-
-const PIPELINE_VARS = [
-  "issue_number",
-  "issue_title",
-  "issue_body",
-  "repo_path",
-  "branch",
-  "model",
-];
 
 const NODE_OPTIONS = [
   { type: "claude_agent", label: "Agent" },
@@ -28,12 +19,15 @@ interface ToolbarProps {
   onDeleteSelected: () => void;
   onAutoLayout: () => void;
   onExportJson: () => void;
+  onCompile: () => void;
+  onToggleContext: () => void;
   hasSelection: boolean;
+  showContext: boolean;
+  compileErrors?: ValidationError[] | null;
 }
 
-export function Toolbar({ nodes, onAddNode, onDeleteSelected, onAutoLayout, onExportJson, hasSelection }: ToolbarProps) {
+export function Toolbar({ nodes, onAddNode, onDeleteSelected, onAutoLayout, onExportJson, onCompile, onToggleContext, hasSelection, showContext, compileErrors }: ToolbarProps) {
   const [open, setOpen] = useState(false);
-  const [showCtx, setShowCtx] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,24 +40,6 @@ export function Toolbar({ nodes, onAddNode, onDeleteSelected, onAutoLayout, onEx
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
-
-  // Collect pipeline vars actually referenced in prompt templates
-  const usedPipelineVars = PIPELINE_VARS.filter((v) =>
-    nodes.some((n) =>
-      n.type === "claude_agent" &&
-      ((n.data.prompt_template as string) || "").includes(`{{${v}}}`)
-    )
-  );
-
-  const ctxEntries = nodes
-    .filter((n) => n.type === "claude_agent")
-    .map((n) => ({
-      name: (n.data.name as string) || n.id,
-      outputs: ((n.data.outputs as { name: string }[]) || [])
-        .map((o) => o.name)
-        .filter(Boolean),
-    }))
-    .filter((e) => e.outputs.length > 0);
 
   return (
     <div className="border-b border-border/50">
@@ -113,6 +89,15 @@ export function Toolbar({ nodes, onAddNode, onDeleteSelected, onAutoLayout, onEx
             variant="ghost"
             size="sm"
             className="h-7 text-xs"
+            onClick={onCompile}
+          >
+            <Zap className="mr-1 h-3.5 w-3.5" />
+            Compile
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
             onClick={onAutoLayout}
           >
             <LayoutGrid className="mr-1 h-3.5 w-3.5" />
@@ -128,10 +113,10 @@ export function Toolbar({ nodes, onAddNode, onDeleteSelected, onAutoLayout, onEx
             Export
           </Button>
           <Button
-            variant={showCtx ? "secondary" : "ghost"}
+            variant={showContext ? "secondary" : "ghost"}
             size="sm"
             className="h-7 text-xs"
-            onClick={() => setShowCtx(!showCtx)}
+            onClick={onToggleContext}
           >
             <Braces className="mr-1 h-3.5 w-3.5" />
             Context
@@ -139,41 +124,15 @@ export function Toolbar({ nodes, onAddNode, onDeleteSelected, onAutoLayout, onEx
         </div>
       </div>
 
-      {showCtx && (
-        <div className="border-t border-border/50 px-3 py-2 space-y-2">
-          {usedPipelineVars.length > 0 && (
-            <div>
-              <span className="text-[10px] text-muted-foreground">Pipeline:</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {usedPipelineVars.map((v) => (
-                  <Badge key={v} variant="outline" className="text-[9px] px-1 py-0 font-mono">
-                    {`{{${v}}}`}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-          {ctxEntries.length > 0 && (
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {ctxEntries.map((entry) => (
-                <div key={entry.name}>
-                  <span className="text-[10px] text-muted-foreground">{entry.name}:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {entry.outputs.map((v) => (
-                      <Badge key={v} variant="outline" className="text-[9px] px-1 py-0 font-mono">
-                        {`{{${v}}}`}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {usedPipelineVars.length === 0 && ctxEntries.length === 0 && (
-            <p className="text-[10px] text-muted-foreground">
-              No variables in context yet. Add pipeline vars to prompts or outputs to agents.
-            </p>
-          )}
+      {compileErrors && compileErrors.length > 0 && (
+        <div className="border-t border-red-500/30 bg-red-500/5 px-3 py-1.5">
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+            {compileErrors.map((e, i) => (
+              <span key={i} className="text-[10px] text-red-500">
+                {e.message}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>

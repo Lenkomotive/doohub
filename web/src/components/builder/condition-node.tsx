@@ -12,7 +12,7 @@ export function ConditionNode({ data, selected }: NodeProps) {
   return (
     <div
       className={`w-44 rounded-lg border bg-amber-500/5 px-3 py-2 shadow-sm ${
-        selected ? "border-amber-500 ring-1 ring-amber-500/30" : "border-amber-500/30"
+        selected ? "border-emerald-500 ring-1 ring-emerald-500/30" : "border-amber-500/30"
       }`}
     >
       <Handle type="target" position={Position.Top} className="!bg-amber-500" />
