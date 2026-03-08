@@ -6,7 +6,6 @@ import Markdown from "react-markdown";
 import {
   ArrowLeft,
   ExternalLink,
-  GitBranch,
   GitMerge,
   Loader2,
   Trash2,
@@ -224,27 +223,8 @@ function PipelineDetail() {
               <p className="font-medium">{repoName}</p>
             </div>
             <div>
-              <span className="text-muted-foreground">Model</span>
-              <p className="font-medium">{pipeline.model}</p>
-            </div>
-            {pipeline.branch && (
-              <div>
-                <span className="text-muted-foreground">Branch</span>
-                <p className="font-medium flex items-center gap-1">
-                  <GitBranch className="h-3.5 w-3.5" />
-                  {pipeline.branch}
-                </p>
-              </div>
-            )}
-            {pipeline.total_cost_usd > 0 && (
-              <div>
-                <span className="text-muted-foreground">Cost</span>
-                <p className="font-medium">${pipeline.total_cost_usd.toFixed(2)}</p>
-              </div>
-            )}
-            <div>
-              <span className="text-muted-foreground">Review round</span>
-              <p className="font-medium">{pipeline.review_round}</p>
+              <span className="text-muted-foreground">Created</span>
+              <p className="font-medium">{new Date(pipeline.created_at).toLocaleString()}</p>
             </div>
             {pipeline.pr_number && (
               <div>
@@ -265,14 +245,12 @@ function PipelineDetail() {
                 </p>
               </div>
             )}
-            <div>
-              <span className="text-muted-foreground">Created</span>
-              <p className="font-medium">{new Date(pipeline.created_at).toLocaleString()}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Updated</span>
-              <p className="font-medium">{new Date(pipeline.updated_at).toLocaleString()}</p>
-            </div>
+            {pipeline.total_cost_usd > 0 && (
+              <div>
+                <span className="text-muted-foreground">Cost</span>
+                <p className="font-medium">${pipeline.total_cost_usd.toFixed(2)}</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
