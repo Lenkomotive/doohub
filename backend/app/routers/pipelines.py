@@ -335,6 +335,7 @@ async def pipeline_callback(
         event["pr_url"] = body.pr_url
     if body.error:
         event["error"] = body.error
+    event["total_cost_usd"] = pipeline.total_cost_usd
     await pipeline_events.publish(event)
 
     if body.status in ("done", "failed"):
@@ -359,6 +360,14 @@ def _get_user_pipeline(db: DBSession, pipeline_key: str, user_id: int) -> Pipeli
     return pipeline
 
 
+def _count_work_nodes(p: Pipeline) -> int:
+    """Count non-meta nodes from the template definition."""
+    if not p.template or not p.template.definition:
+        return 0
+    nodes = p.template.definition.get("nodes", [])
+    return sum(1 for n in nodes if n.get("type") not in ("start", "end", "failed"))
+
+
 def _serialize(p: Pipeline) -> dict:
     return {
         "pipeline_key": p.pipeline_key,
@@ -378,6 +387,7 @@ def _serialize(p: Pipeline) -> dict:
         "step_logs": p.step_logs or [],
         "template_id": p.template_id,
         "template_name": p.template.name if p.template else None,
+        "total_steps": _count_work_nodes(p),
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
     }

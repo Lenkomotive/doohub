@@ -89,7 +89,7 @@ function TemplatesContent() {
           <p className="text-sm text-muted-foreground">No templates yet</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2">
           {templates.map((template) => (
             <TemplateCard
               key={template.id}

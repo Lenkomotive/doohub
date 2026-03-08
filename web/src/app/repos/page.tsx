@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FolderGit2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { Card, CardHeader } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { SkeletonList } from "@/components/skeleton-card";
 
@@ -42,21 +41,17 @@ function ReposContent() {
           <p className="text-sm text-muted-foreground">No repos</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2">
           {repos.map((repo) => (
-            <Card
+            <div
               key={repo.path}
-              className="cursor-pointer border-border/50 bg-card/50 transition-colors hover:bg-accent/50"
+              className="flex items-center gap-2 rounded-md border border-border/40 bg-card/50 px-3 py-2 transition-colors hover:bg-accent/50 cursor-pointer"
               onClick={() => router.push(`/repos/issues?repo_path=${encodeURIComponent(repo.path)}`)}
             >
-              <CardHeader className="flex flex-row items-center gap-3 space-y-0">
-                <FolderGit2 className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <h3 className="text-sm font-medium">{repo.name}</h3>
-                  <p className="text-xs text-muted-foreground">{repo.path}</p>
-                </div>
-              </CardHeader>
-            </Card>
+              <FolderGit2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-sm font-medium">{repo.name}</span>
+              <span className="text-[11px] text-muted-foreground">{repo.path}</span>
+            </div>
           ))}
         </div>
       )}

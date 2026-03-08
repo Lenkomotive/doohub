@@ -32,6 +32,7 @@ export interface Pipeline {
   step_logs: StepLog[];
   template_id: number | null;
   template_name: string | null;
+  total_steps: number;
   created_at: string;
   updated_at: string;
 }
@@ -202,7 +203,7 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
 
     const conn = connectSSE("/pipelines/events", (event, data) => {
       if (event === "pipeline") {
-        const update = data as { pipeline_key: string; status: string; pr_url?: string; error?: string; step?: StepLog };
+        const update = data as { pipeline_key: string; status: string; pr_url?: string; error?: string; step?: StepLog; total_cost_usd?: number };
         set((state) => {
           const idx = state.pipelines.findIndex((p) => p.pipeline_key === update.pipeline_key);
           if (idx >= 0) {
@@ -211,6 +212,7 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
             pipeline.status = update.status;
             if (update.pr_url !== undefined) pipeline.pr_url = update.pr_url;
             if (update.error !== undefined) pipeline.error = update.error;
+            if (update.total_cost_usd !== undefined) pipeline.total_cost_usd = update.total_cost_usd;
 
             // Update step_logs from SSE step data
             if (update.step) {

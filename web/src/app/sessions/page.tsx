@@ -43,15 +43,14 @@ function SessionsContent() {
           <p className="text-sm text-muted-foreground">No sessions</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2">
           {sessions.map((session) => (
-            <div key={session.session_key} className="group">
-              <SessionCard
-                session={session}
-                onClick={() => router.push(`/sessions/${session.session_key}`)}
-                onDelete={() => deleteSession(session.session_key)}
-              />
-            </div>
+            <SessionCard
+              key={session.session_key}
+              session={session}
+              onClick={() => router.push(`/sessions/${session.session_key}`)}
+              onDelete={() => deleteSession(session.session_key)}
+            />
           ))}
         </div>
       )}

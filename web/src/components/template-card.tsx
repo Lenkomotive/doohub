@@ -1,7 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Trash2, Bot } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { PipelineTemplate } from "@/store/templates";
@@ -10,7 +9,6 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
-    year: "numeric",
   });
 }
 
@@ -29,40 +27,32 @@ export function TemplateCard({
   ).length ?? 0;
 
   return (
-    <Card
-      className="border-border/50 bg-card/50 transition-colors hover:bg-accent/50 cursor-pointer"
+    <div
+      className="group flex items-center gap-2 rounded-md border border-border/40 bg-card/50 px-3 py-2 transition-colors hover:bg-accent/50 cursor-pointer"
       onClick={onClick}
     >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <div className="flex-1 min-w-0 pr-2">
-          <h3 className="text-sm font-medium truncate">{template.name}</h3>
-          {template.description && (
-            <p className="text-xs text-muted-foreground truncate mt-0.5">
-              {template.description}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <Badge variant="outline">{nodeCount} nodes</Badge>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span>
-          {agentCount} agent{agentCount !== 1 ? "s" : ""}
-        </span>
-        <span>Updated {formatDate(template.updated_at)}</span>
-      </CardContent>
-    </Card>
+      <span className="text-sm font-medium truncate">{template.name}</span>
+      {template.description && (
+        <>
+          <span className="text-border">·</span>
+          <span className="text-[11px] text-muted-foreground truncate hidden sm:inline">{template.description}</span>
+        </>
+      )}
+      <div className="flex-1" />
+      <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground shrink-0">
+        <Bot className="h-2.5 w-2.5" />
+        {agentCount}
+      </span>
+      <Badge variant="outline" className="text-[10px] h-5 shrink-0">{nodeCount} nodes</Badge>
+      <span className="text-[11px] text-muted-foreground shrink-0">{formatDate(template.updated_at)}</span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive shrink-0"
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+    </div>
   );
 }
