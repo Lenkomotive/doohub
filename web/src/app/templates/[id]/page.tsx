@@ -473,6 +473,7 @@ function BuilderContent() {
             allNodes={nodes}
             onUpdate={handleNodeUpdate}
             onClose={() => setSelectedNodeId(null)}
+            currentTemplateId={templateId}
           />
         )}
         {showContext && (

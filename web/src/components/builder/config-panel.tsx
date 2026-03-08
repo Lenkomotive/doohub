@@ -24,6 +24,7 @@ interface ConfigPanelProps {
   allNodes: Node[];
   onUpdate: (id: string, data: Record<string, unknown>) => void;
   onClose: () => void;
+  currentTemplateId?: number;
 }
 
 type OutputDef = { name: string; values: string[] };
@@ -42,7 +43,7 @@ function branchesToRecord(branches: Branch[]): Record<string, string> {
   return record;
 }
 
-export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelProps) {
+export function ConfigPanel({ node, allNodes, onUpdate, onClose, currentTemplateId }: ConfigPanelProps) {
   const { data } = node;
   const nodeType = node.type || data.type;
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -322,7 +323,7 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
         )}
 
         {/* Template node */}
-        {nodeType === "template" && <TemplateConfig node={node} allNodes={allNodes} onUpdate={onUpdate} />}
+        {nodeType === "template" && <TemplateConfig node={node} allNodes={allNodes} onUpdate={onUpdate} currentTemplateId={currentTemplateId} />}
 
         {/* Condition node */}
         {nodeType === "condition" && (() => {
@@ -556,10 +557,12 @@ function TemplateConfig({
   node,
   allNodes,
   onUpdate,
+  currentTemplateId,
 }: {
   node: Node;
   allNodes: Node[];
   onUpdate: (id: string, data: Record<string, unknown>) => void;
+  currentTemplateId?: number;
 }) {
   const { data } = node;
   const { templates, fetchTemplates } = useTemplatesStore();
@@ -581,11 +584,13 @@ function TemplateConfig({
           className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
         >
           <option value="">Select template…</option>
-          {templates.map((t) => (
-            <option key={t.id} value={String(t.id)}>
-              {t.name}
-            </option>
-          ))}
+          {templates
+            .filter((t) => !currentTemplateId || t.id !== currentTemplateId)
+            .map((t) => (
+              <option key={t.id} value={String(t.id)}>
+                {t.name}
+              </option>
+            ))}
         </select>
       </Field>
 
