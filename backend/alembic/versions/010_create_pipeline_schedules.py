@@ -39,9 +39,15 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.add_column("pipelines", sa.Column("schedule_id", sa.Integer(), sa.ForeignKey("pipeline_schedules.id"), nullable=True))
+    op.create_index(
+        "ix_pipeline_schedules_active_next_run",
+        "pipeline_schedules",
+        ["is_active", "next_run_at"],
+    )
+    op.add_column("pipelines", sa.Column("schedule_id", sa.Integer(), sa.ForeignKey("pipeline_schedules.id", ondelete="SET NULL"), nullable=True))
 
 
 def downgrade() -> None:
     op.drop_column("pipelines", "schedule_id")
+    op.drop_index("ix_pipeline_schedules_active_next_run", table_name="pipeline_schedules")
     op.drop_table("pipeline_schedules")

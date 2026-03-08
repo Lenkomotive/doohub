@@ -48,6 +48,14 @@ class CreatePipelineScheduleRequest(BaseModel):
         return self
 
 
+# Explicit allowlist of fields that can be updated via PUT
+UPDATABLE_FIELDS = frozenset({
+    "name", "repo_path", "issue_number", "task_description", "model",
+    "template_id", "schedule_type", "cron_expression", "scheduled_at",
+    "timezone", "skip_if_running",
+})
+
+
 class UpdatePipelineScheduleRequest(BaseModel):
     name: str | None = None
     repo_path: str | None = None
@@ -85,24 +93,15 @@ class UpdatePipelineScheduleRequest(BaseModel):
                 if "must be in the future" in str(e):
                     raise
                 raise ValueError(f"Invalid scheduled_at datetime: {self.scheduled_at}")
+
+        # Cross-field validation: changing schedule_type requires matching fields
+        if self.schedule_type == "recurring" and self.cron_expression is None:
+            raise ValueError(
+                "cron_expression is required when changing schedule_type to 'recurring'"
+            )
+        if self.schedule_type == "once" and self.scheduled_at is None:
+            raise ValueError(
+                "scheduled_at is required when changing schedule_type to 'once'"
+            )
+
         return self
-
-
-class PipelineScheduleResponse(BaseModel):
-    id: int
-    name: str
-    repo_path: str
-    issue_number: int | None
-    task_description: str
-    model: str
-    template_id: int | None
-    schedule_type: str
-    cron_expression: str | None
-    scheduled_at: str | None
-    timezone: str
-    is_active: bool
-    skip_if_running: bool
-    next_run_at: str | None
-    last_run_at: str | None
-    created_at: str
-    updated_at: str

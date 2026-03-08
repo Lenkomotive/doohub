@@ -112,3 +112,31 @@ class TestUpdatePipelineScheduleRequest:
         req = UpdatePipelineScheduleRequest(name="New name", skip_if_running=False)
         assert req.name == "New name"
         assert req.skip_if_running is False
+
+    def test_change_to_once_without_scheduled_at_fails(self):
+        with pytest.raises(ValidationError, match="scheduled_at is required"):
+            UpdatePipelineScheduleRequest(schedule_type="once")
+
+    def test_change_to_recurring_without_cron_fails(self):
+        with pytest.raises(ValidationError, match="cron_expression is required"):
+            UpdatePipelineScheduleRequest(schedule_type="recurring")
+
+    def test_change_to_once_with_scheduled_at_succeeds(self):
+        future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        req = UpdatePipelineScheduleRequest(
+            schedule_type="once",
+            scheduled_at=future,
+        )
+        assert req.schedule_type == "once"
+
+    def test_change_to_recurring_with_cron_succeeds(self):
+        req = UpdatePipelineScheduleRequest(
+            schedule_type="recurring",
+            cron_expression="0 * * * *",
+        )
+        assert req.schedule_type == "recurring"
+
+    def test_update_cron_without_changing_type_succeeds(self):
+        """Updating just the cron expression without changing schedule_type is valid."""
+        req = UpdatePipelineScheduleRequest(cron_expression="30 * * * *")
+        assert req.cron_expression == "30 * * * *"

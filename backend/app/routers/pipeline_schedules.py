@@ -1,11 +1,8 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session as DBSession
-from zoneinfo import ZoneInfo
-
-from croniter import croniter
 
 from app.core.auth import get_current_user
 from app.core.database import get_db
@@ -16,6 +13,7 @@ from app.models.user import User
 from app.schemas.pipeline_schedule import (
     CreatePipelineScheduleRequest,
     UpdatePipelineScheduleRequest,
+    UPDATABLE_FIELDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -99,6 +97,10 @@ async def update_schedule(
     schedule_params_changed = False
 
     for field, value in update_data.items():
+        # Only allow known updatable fields
+        if field not in UPDATABLE_FIELDS:
+            continue
+
         if field == "scheduled_at" and value is not None:
             dt = datetime.fromisoformat(value)
             if dt.tzinfo is None:
@@ -132,6 +134,10 @@ async def delete_schedule(
     user: User = Depends(get_current_user),
 ):
     schedule = _get_user_schedule(db, schedule_id, user.id)
+    # Nullify schedule_id on linked pipelines before deleting
+    db.query(Pipeline).filter(Pipeline.schedule_id == schedule.id).update(
+        {"schedule_id": None}, synchronize_session="fetch"
+    )
     db.delete(schedule)
     db.commit()
 
@@ -155,16 +161,28 @@ async def resume_schedule(
     user: User = Depends(get_current_user),
 ):
     schedule = _get_user_schedule(db, schedule_id, user.id)
-    schedule.is_active = True
 
     # Recompute next_run_at
     if schedule.schedule_type == "recurring" and schedule.cron_expression:
-        schedule.next_run_at = compute_next_run(
-            schedule.cron_expression, schedule.timezone
-        )
+        next_run = compute_next_run(schedule.cron_expression, schedule.timezone)
     elif schedule.schedule_type == "once" and schedule.scheduled_at:
-        schedule.next_run_at = schedule.scheduled_at
+        scheduled_at = schedule.scheduled_at
+        if scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        if scheduled_at <= datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot resume: scheduled_at is in the past. Update scheduled_at first.",
+            )
+        next_run = scheduled_at
+    else:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot resume: schedule has no valid timing configuration.",
+        )
 
+    schedule.is_active = True
+    schedule.next_run_at = next_run
     db.commit()
     db.refresh(schedule)
 
@@ -174,8 +192,8 @@ async def resume_schedule(
 @router.get("/pipeline-schedules/{schedule_id}/history")
 async def schedule_history(
     schedule_id: int,
-    limit: int = 20,
-    offset: int = 0,
+    limit: int = Query(default=20, le=100, ge=1),
+    offset: int = Query(default=0, ge=0),
     db: DBSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
