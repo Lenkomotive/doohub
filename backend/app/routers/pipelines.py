@@ -278,10 +278,10 @@ async def pipeline_callback(
         event["error"] = body.error
     await pipeline_events.publish(event)
 
-    if body.status in ("done", "failed", "blocked"):
+    if body.status in ("done", "failed"):
         user = db.query(User).filter(User.id == pipeline.user_id).first()
         if user and user.fcm_token and user.notify_pipelines:
-            title = {"done": "Pipeline finished", "failed": "Pipeline failed", "blocked": "Pipeline blocked"}.get(body.status, "Pipeline update")
+            title = "Pipeline finished" if body.status == "done" else "Pipeline failed"
             desc = pipeline.issue_title or pipeline.task_description or ""
             send_push(user.fcm_token, title, desc, {"pipeline_key": body.pipeline_key})
 

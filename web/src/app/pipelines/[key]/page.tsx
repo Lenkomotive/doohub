@@ -59,8 +59,6 @@ const stepStatusIcon = (status: string) => {
 };
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  checking_dependencies: "default",
-  blocked: "destructive",
   planning: "default",
   planned: "default",
   developing: "default",

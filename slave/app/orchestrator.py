@@ -13,7 +13,7 @@ from pathlib import Path
 import httpx
 
 from app import claude_runner
-from app.agent_prompts import dependency_checker_prompt, developer_prompt, planner_prompt, reviewer_prompt
+from app.agent_prompts import developer_prompt, planner_prompt, reviewer_prompt
 from app.config import settings
 from app.graph_executor import execute_graph
 
@@ -78,103 +78,6 @@ def _extract_pr_url(text: str) -> str | None:
 def _extract_pr_number(url: str) -> int | None:
     match = re.search(r"/pull/(\d+)", url)
     return int(match.group(1)) if match else None
-
-
-async def _fetch_open_issues(repo_path: str, limit: int = 50) -> list[dict]:
-    """Fetch open issues with labels from the repo."""
-    code, out = await _run_gh(
-        repo_path, "issue", "list",
-        "--state", "open",
-        "--limit", str(limit),
-        "--json", "number,title,labels",
-    )
-    if code != 0 or not out:
-        return []
-    try:
-        issues = json.loads(out)
-        return [
-            {
-                "number": i["number"],
-                "title": i["title"],
-                "labels": [l["name"] for l in i.get("labels", [])],
-            }
-            for i in issues
-        ]
-    except (json.JSONDecodeError, KeyError):
-        return []
-
-
-async def _fetch_issue_labels(repo_path: str, issue_number: int) -> list[str]:
-    """Fetch labels for a specific issue."""
-    code, out = await _run_gh(
-        repo_path, "issue", "view", str(issue_number),
-        "--json", "labels",
-    )
-    if code != 0 or not out:
-        return []
-    try:
-        data = json.loads(out)
-        return [l["name"] for l in data.get("labels", [])]
-    except (json.JSONDecodeError, KeyError):
-        return []
-
-
-async def _check_dependencies(ctx: dict, worktree_path: str) -> dict:
-    """Run dependency check. Returns {blocked: bool, reason: str, blocking_issue: int|None}."""
-    issue_number = ctx.get("issue_number")
-    if not issue_number:
-        return {"blocked": False, "reason": None, "blocking_issue": None}
-
-    repo_path = ctx["repo_path"]
-    labels = await _fetch_issue_labels(repo_path, issue_number)
-    open_issues = await _fetch_open_issues(repo_path)
-
-    if not open_issues:
-        return {"blocked": False, "reason": None, "blocking_issue": None}
-
-    prompt = dependency_checker_prompt(
-        issue_number=issue_number,
-        issue_title=ctx.get("issue_title", ""),
-        issue_body=ctx.get("issue_body", ""),
-        issue_labels=labels,
-        open_issues=open_issues,
-    )
-
-    result = await claude_runner.run_prompt(
-        prompt=prompt,
-        project_path=worktree_path,
-        model=ctx["model"],
-        timeout=300,
-        session_key=f"__orch_depcheck_{ctx['pipeline_key']}__",
-    )
-
-    ctx["cost_usd"] = ctx.get("cost_usd", 0) + (result.get("cost_usd") or 0)
-    ctx["input_tokens"] = ctx.get("input_tokens", 0) + (result.get("input_tokens") or 0)
-    ctx["output_tokens"] = ctx.get("output_tokens", 0) + (result.get("output_tokens") or 0)
-
-    if result.get("type") == "error":
-        logger.warning("Dependency check failed: %s — proceeding anyway", result.get("error"))
-        return {"blocked": False, "reason": None, "blocking_issue": None}
-
-    text = result.get("result", "")
-    # Parse verdict from last lines
-    for line in reversed(text.strip().splitlines()):
-        line = line.strip()
-        if line.startswith("BLOCKED #"):
-            # Parse "BLOCKED #42: reason"
-            match = re.match(r"BLOCKED\s+#(\d+):\s*(.+)", line)
-            if match:
-                return {
-                    "blocked": True,
-                    "blocking_issue": int(match.group(1)),
-                    "reason": match.group(2).strip(),
-                }
-            return {"blocked": True, "blocking_issue": None, "reason": line}
-        if line == "READY":
-            return {"blocked": False, "reason": None, "blocking_issue": None}
-
-    logger.warning("Could not parse dependency check verdict: %s", text[-200:])
-    return {"blocked": False, "reason": None, "blocking_issue": None}
 
 
 def _slugify(text: str) -> str:
@@ -385,37 +288,6 @@ async def _run_graph_pipeline(ctx: dict) -> None:
 
         ctx["worktree_path"] = worktree_path
 
-        # Dependency check
-        if ctx.get("issue_number"):
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "checking_dependencies",
-                "step_log": "Checking for blocking dependencies",
-            })
-            dep_result = await _check_dependencies(ctx, worktree_path)
-            if dep_result["blocked"]:
-                blocking = dep_result.get("blocking_issue")
-                reason = dep_result.get("reason", "Unknown dependency")
-                msg = f"Blocked by #{blocking}: {reason}" if blocking else f"Blocked: {reason}"
-                logger.info("Pipeline %s: %s", key, msg)
-                await _run_gh(
-                    repo_path, "issue", "comment", str(ctx["issue_number"]),
-                    "--body", f"## Dependency Check\n\n{msg}\n\nThis issue cannot be worked on until the blocking issue is resolved.",
-                )
-                await _callback(cb_url, api_key, {
-                    "pipeline_key": key, "status": "blocked", "error": msg,
-                    "cost_usd": ctx.get("cost_usd", 0),
-                    "input_tokens": ctx.get("input_tokens", 0),
-                    "output_tokens": ctx.get("output_tokens", 0),
-                    "step_log": msg,
-                })
-                await _cleanup_worktree(repo_path, worktree_path)
-                return
-
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key,
-                "step_log": "No blocking dependencies — proceeding",
-            })
-
         # Run the graph
         async def cb(data: dict) -> None:
             await _callback(cb_url, api_key, data)
@@ -472,7 +344,10 @@ async def _run_pipeline(ctx: dict) -> None:
         ctx["branch"] = f"doohub/pipeline-{key}"
 
     try:
-        # 0. Dependency check
+        # 1. Plan
+        await _callback(cb_url, api_key, {
+            "pipeline_key": key, "status": "planning", "step_log": "Starting planner agent",
+        })
         worktree_path = await _ensure_worktree(repo_path, key, ctx["branch"])
         if not worktree_path:
             await _callback(cb_url, api_key, {
@@ -480,42 +355,6 @@ async def _run_pipeline(ctx: dict) -> None:
             })
             return
 
-        if ctx.get("issue_number"):
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "checking_dependencies",
-                "step_log": "Checking for blocking dependencies",
-            })
-            dep_result = await _check_dependencies(ctx, worktree_path)
-            if dep_result["blocked"]:
-                blocking = dep_result.get("blocking_issue")
-                reason = dep_result.get("reason", "Unknown dependency")
-                msg = f"Blocked by #{blocking}: {reason}" if blocking else f"Blocked: {reason}"
-                logger.info("Pipeline %s: %s", key, msg)
-                # Post comment on the issue
-                await _run_gh(
-                    repo_path, "issue", "comment", str(ctx["issue_number"]),
-                    "--body", f"## Dependency Check\n\n{msg}\n\nThis issue cannot be worked on until the blocking issue is resolved.",
-                )
-                await _callback(cb_url, api_key, {
-                    "pipeline_key": key, "status": "blocked", "error": msg,
-                    "cost_usd": ctx.get("cost_usd", 0),
-                    "input_tokens": ctx.get("input_tokens", 0),
-                    "output_tokens": ctx.get("output_tokens", 0),
-                    "step_log": msg,
-                })
-                await _cleanup_worktree(repo_path, worktree_path)
-                return
-
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "planning",
-                "step_log": "No blocking dependencies — starting planner agent",
-            })
-        else:
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "planning", "step_log": "Starting planner agent",
-            })
-
-        # 1. Plan
         plan = await _run_planner(ctx, worktree_path)
         if not plan:
             await _callback(cb_url, api_key, {
