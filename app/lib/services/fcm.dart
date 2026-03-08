@@ -20,6 +20,12 @@ Future<void> registerFcmToken(ApiService api) async {
     );
     _log('Permission status: ${settings.authorizationStatus}');
 
+    await messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
     if (Platform.isIOS) {
       String? apnsToken;
       for (var i = 0; i < 5 && apnsToken == null; i++) {
