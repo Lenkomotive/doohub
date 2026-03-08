@@ -30,6 +30,8 @@ export interface Pipeline {
   model: string;
   total_cost_usd: number;
   step_logs: StepLog[];
+  template_id: number | null;
+  template_name: string | null;
   created_at: string;
   updated_at: string;
 }
