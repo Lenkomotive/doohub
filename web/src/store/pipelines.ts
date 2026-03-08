@@ -69,7 +69,7 @@ interface PipelinesState {
   disconnectSSE: () => void;
 }
 
-const ACTIVE_STATUSES = new Set(["starting", "running", "planning", "planned", "developing", "developed", "reviewing"]);
+const ACTIVE_STATUSES = new Set(["starting", "running", "checking_dependencies", "planning", "planned", "developing", "developed", "reviewing"]);
 
 export function isActive(status: string): boolean {
   return ACTIVE_STATUSES.has(status);

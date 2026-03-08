@@ -4,6 +4,55 @@ Each function returns a prompt string passed via --append-system-prompt.
 """
 
 
+def dependency_checker_prompt(
+    issue_number: int,
+    issue_title: str,
+    issue_body: str,
+    issue_labels: list[str],
+    open_issues: list[dict],
+) -> str:
+    labels_str = ", ".join(issue_labels) if issue_labels else "(none)"
+    issues_list = "\n".join(
+        f"  - #{i['number']}: {i['title']} [labels: {', '.join(i.get('labels', []))}]"
+        for i in open_issues
+        if i["number"] != issue_number
+    ) or "  (no other open issues)"
+
+    return (
+        f"## Task\n"
+        f"You are a DEPENDENCY CHECKER agent. Before starting work on an issue, you must determine\n"
+        f"whether this issue depends on other work that hasn't been done yet.\n\n"
+        f"## Current Issue\n"
+        f"Issue #{issue_number}: {issue_title}\n"
+        f"Labels: {labels_str}\n"
+        f"Description:\n{issue_body}\n\n"
+        f"## Other Open Issues in This Repo\n"
+        f"{issues_list}\n\n"
+        f"## Instructions\n"
+        f"This is a monorepo with three components: `app` (Flutter), `web` (Next.js), and `backend` (FastAPI).\n"
+        f"Issues are labeled with the component they belong to.\n\n"
+        f"1. Determine which component this issue targets (app, web, or backend) from its labels and content.\n"
+        f"2. Check if this issue depends on another component's work. For example:\n"
+        f"   - An `app` or `web` issue may need a `backend` API that doesn't exist yet.\n"
+        f"   - A `web` issue may need shared types or models from `backend`.\n"
+        f"3. Look at the other open issues — if there's an open issue for the dependency\n"
+        f"   (e.g., an open `backend` issue for the same feature), that's a blocker.\n"
+        f"4. Explore the codebase to verify: does the required code (API endpoints, models, etc.)\n"
+        f"   already exist? If the code is already there, the dependency is satisfied even if an issue is open.\n"
+        f"5. ONLY flag a dependency if:\n"
+        f"   a) The current issue clearly requires code from another component, AND\n"
+        f"   b) That code does NOT already exist in the codebase, AND\n"
+        f"   c) There IS an open issue for that missing work.\n\n"
+        f"## Output\n"
+        f"You MUST end your response with exactly one of these verdicts on its own line:\n\n"
+        f"READY\n"
+        f"(meaning: no blocking dependencies, this issue can be worked on now)\n\n"
+        f"BLOCKED #<issue_number>: <short reason>\n"
+        f"(meaning: this issue is blocked by the specified issue — e.g. BLOCKED #42: backend API for user profiles not implemented yet)\n"
+    )
+
+
+
 def planner_prompt(issue_number: int | None, issue_title: str, issue_body: str) -> str:
     issue_ref = f"GitHub issue #{issue_number}" if issue_number else "the task below"
     return (

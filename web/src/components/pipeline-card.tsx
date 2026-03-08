@@ -9,6 +9,8 @@ import type { Pipeline, MergeStatus } from "@/store/pipelines";
 import { isActive } from "@/store/pipelines";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  checking_dependencies: "default",
+  blocked: "destructive",
   planning: "default",
   planned: "default",
   developing: "default",
