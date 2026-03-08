@@ -225,12 +225,72 @@ async def _handle_condition(node: dict, ctx: dict) -> str | None:
     return next_node
 
 
+async def _handle_template(node: dict, ctx: dict, callback) -> str | None:
+    """Execute a nested template as a sub-pipeline.
+
+    Looks up the referenced template definition from ctx["_nested_templates"],
+    runs it via execute_graph() with a shared context, and merges results back.
+    """
+    key = ctx["pipeline_key"]
+    node_id = node["id"]
+    node_name = node.get("name", node_id)
+    template_id = str(node.get("template_id", ""))
+    nested_templates = ctx.get("_nested_templates", {})
+
+    if not template_id:
+        logger.error("Pipeline %s: template node '%s' has no template_id", key, node_id)
+        ctx[f"_error_{node_id}"] = "Template node missing template_id"
+        return None
+
+    child_definition = nested_templates.get(template_id)
+    if not child_definition:
+        logger.error("Pipeline %s: nested template '%s' not found for node '%s'", key, template_id, node_id)
+        ctx[f"_error_{node_id}"] = f"Nested template {template_id} not found"
+        return None
+
+    logger.info(
+        "Pipeline %s: entering nested template '%s' (template_id=%s) at node '%s'",
+        key, child_definition.get("name", "unnamed"), template_id, node_id,
+    )
+
+    # Wrap callback to prefix child step node_ids for uniqueness
+    async def child_callback(data: dict) -> None:
+        if "step" in data:
+            step = data["step"]
+            step["node_id"] = f"{node_id}.{step['node_id']}"
+            step["node_name"] = f"{node_name} > {step.get('node_name', '')}"
+        # Forward step_log with prefix
+        if "step_log" in data:
+            data["step_log"] = f"[{node_name}] {data['step_log']}"
+        # Don't forward terminal status from child — parent controls that
+        if data.get("status") in ("done", "failed"):
+            child_status = data["status"]
+            ctx[f"_child_status_{node_id}"] = child_status
+            if child_status == "failed":
+                ctx[f"_error_{node_id}"] = data.get("error", "Nested template failed")
+            # Report as progress, not terminal
+            data["status"] = "running"
+        await callback(data)
+
+    # Execute child graph with shared context
+    cost_before = ctx.get("cost_usd", 0)
+    await execute_graph(child_definition, ctx, child_callback)
+
+    child_status = ctx.pop(f"_child_status_{node_id}", "done")
+    if child_status == "failed":
+        # Propagate failure
+        return None
+
+    return "__template_done__"
+
+
 _NODE_HANDLERS = {
     "start": _handle_start,
     "end": _handle_end,
     "failed": _handle_failed,
     "claude_agent": _handle_claude_agent,
     "condition": _handle_condition,
+    "template": _handle_template,
 }
 
 
@@ -416,12 +476,40 @@ async def execute_graph(
         })
         logger.info("Pipeline %s: %s (%s) → started", key, current_id, node_type)
 
-        result = await handler(node, ctx)
+        if node_type == "template":
+            result = await handler(node, ctx, callback)
+        else:
+            result = await handler(node, ctx)
         node_duration = time.monotonic() - node_start
         logger.info("Pipeline %s: %s completed in %.1fs", key, current_id, node_duration)
 
         # ── Handle result based on node type ────────────────────────────
-        if node_type == "claude_agent":
+        if node_type == "template":
+            if result is None:
+                # Nested template failed
+                tpl_error = ctx.get(f"_error_{current_id}", "Nested template failed")
+                logger.error("Pipeline %s: %s template failed: %s", key, current_id, tpl_error)
+                await callback({
+                    "pipeline_key": key,
+                    "status": "failed",
+                    "error": f"Template '{node_name}' failed: {tpl_error}",
+                    "cost_usd": ctx.get("cost_usd", 0),
+                    "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error=tpl_error),
+                })
+                return
+
+            # Template succeeded
+            await callback({
+                "pipeline_key": key,
+                "status": status_label or "running",
+                "cost_usd": ctx.get("cost_usd", 0),
+                "step_log": f"[{visited_count}/{total_nodes}] {node_name} completed in {node_duration:.1f}s",
+                "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso),
+                **{k: ctx.get(k) for k in ["pr_url", "pr_number", "branch", "claude_session_id", "issue_title"] if ctx.get(k)},
+            })
+            current_id = _get_next_node(node, edge_map)
+
+        elif node_type == "claude_agent":
             if result is None:
                 # Agent failed
                 agent_error = ctx.get(f"_error_{current_id}", "Agent returned no result")

@@ -276,6 +276,7 @@ def start(
     callback_url: str,
     api_key: str,
     template_definition: dict,
+    nested_templates: dict | None = None,
 ) -> None:
     if pipeline_key in _tasks:
         raise ValueError(f"Pipeline {pipeline_key} is already running")
@@ -291,6 +292,7 @@ def start(
         "api_key": api_key,
         "cost_usd": 0,
         "template_definition": template_definition,
+        "_nested_templates": nested_templates or {},
     }
 
     logger.info("Pipeline %s: starting template '%s'", pipeline_key, template_definition.get("name", "unnamed"))

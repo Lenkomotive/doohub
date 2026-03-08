@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, field_validator
 
-ALLOWED_NODE_TYPES = {"start", "end", "failed", "claude_agent", "condition"}
+ALLOWED_NODE_TYPES = {"start", "end", "failed", "claude_agent", "condition", "template"}
 
 
 def _validate_definition(definition: dict[str, Any]) -> dict[str, Any]:
@@ -29,6 +29,11 @@ def _validate_definition(definition: dict[str, Any]) -> dict[str, Any]:
                 f"Node '{node['id']}' has invalid type '{node['type']}'. "
                 f"Allowed: {', '.join(sorted(ALLOWED_NODE_TYPES))}"
             )
+        if node["type"] == "template":
+            if not node.get("template_id"):
+                raise ValueError(
+                    f"Node '{node['id']}' of type 'template' must have a non-empty 'template_id'"
+                )
         node_ids.add(node["id"])
 
     edges = definition["edges"]

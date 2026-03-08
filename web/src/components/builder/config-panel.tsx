@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { Node } from "@xyflow/react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useTemplatesStore } from "@/store/templates";
 
 const PIPELINE_VARS = [
   "issue_number",
@@ -320,6 +321,9 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
           </>
         )}
 
+        {/* Template node */}
+        {nodeType === "template" && <TemplateConfig node={node} allNodes={allNodes} onUpdate={onUpdate} />}
+
         {/* Condition node */}
         {nodeType === "condition" && (() => {
           const targetNodes = allNodes.filter((n) => n.id !== node.id);
@@ -545,6 +549,79 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Label className="text-[10px] text-muted-foreground">{label}</Label>
       {children}
     </div>
+  );
+}
+
+function TemplateConfig({
+  node,
+  allNodes,
+  onUpdate,
+}: {
+  node: Node;
+  allNodes: Node[];
+  onUpdate: (id: string, data: Record<string, unknown>) => void;
+}) {
+  const { data } = node;
+  const { templates, fetchTemplates } = useTemplatesStore();
+
+  useEffect(() => {
+    if (templates.length === 0) fetchTemplates();
+  }, [templates.length, fetchTemplates]);
+
+  function update(field: string, value: unknown) {
+    onUpdate(node.id, { ...data, [field]: value });
+  }
+
+  return (
+    <>
+      <Field label="Template">
+        <select
+          value={(data.template_id as string) || ""}
+          onChange={(e) => update("template_id", e.target.value || null)}
+          className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+        >
+          <option value="">Select template…</option>
+          {templates.map((t) => (
+            <option key={t.id} value={String(t.id)}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      {data.template_id && (() => {
+        const selected = templates.find((t) => String(t.id) === String(data.template_id));
+        if (!selected) return null;
+        return (
+          <div className="rounded-md border border-border/50 bg-muted/30 p-2">
+            <span className="text-[10px] text-muted-foreground">
+              {selected.description || "No description"}
+            </span>
+            <div className="mt-1 text-[9px] text-muted-foreground/70">
+              {selected.definition.nodes.length} nodes
+            </div>
+          </div>
+        );
+      })()}
+
+      <Field label="Status Label">
+        <Input
+          value={(data.status_label as string) || ""}
+          onChange={(e) => update("status_label", e.target.value)}
+          className="h-7 text-xs"
+          placeholder="e.g. refining issue"
+        />
+      </Field>
+
+      <Separator />
+
+      <NextNodes
+        targets={(data.targets as string[]) || []}
+        allNodes={allNodes}
+        currentNodeId={node.id}
+        onUpdate={(targets) => update("targets", targets)}
+      />
+    </>
   );
 }
 

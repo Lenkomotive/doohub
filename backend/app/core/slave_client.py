@@ -146,6 +146,7 @@ class SlaveClient:
         model: str,
         callback_url: str,
         template_definition: dict,
+        nested_templates: dict | None = None,
     ) -> Any:
         payload: dict[str, Any] = {
             "pipeline_key": pipeline_key,
@@ -156,6 +157,8 @@ class SlaveClient:
             "callback_url": callback_url,
             "template_definition": template_definition,
         }
+        if nested_templates:
+            payload["nested_templates"] = nested_templates
         return await self._request("POST", "/api/orchestrate", json=payload)
 
     async def cancel_pipeline(self, pipeline_key: str) -> Any:

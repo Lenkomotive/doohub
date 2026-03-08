@@ -30,6 +30,7 @@ import { EndNode } from "@/components/builder/end-node";
 import { FailedNode } from "@/components/builder/failed-node";
 import { AgentNode } from "@/components/builder/agent-node";
 import { ConditionNode } from "@/components/builder/condition-node";
+import { TemplateNode } from "@/components/builder/template-node";
 import { ConfigPanel } from "@/components/builder/config-panel";
 import { ContextPanel } from "@/components/builder/context-panel";
 import { Toolbar } from "@/components/builder/toolbar";
@@ -53,6 +54,7 @@ const nodeTypes = {
   failed: FailedNode,
   claude_agent: AgentNode,
   condition: ConditionNode,
+  template: TemplateNode,
 };
 
 function BuilderContent() {
@@ -173,7 +175,7 @@ function BuilderContent() {
             if (branches.some((b) => b.target === connection.target)) return node;
             return { ...node, data: { ...node.data, branches: [...branches, { value: "", target: connection.target }] } };
           }
-          if (type === "start" || type === "claude_agent" || type === "failed") {
+          if (type === "start" || type === "claude_agent" || type === "failed" || type === "template") {
             const targets = (node.data.targets as string[]) || [];
             if (targets.includes(connection.target)) return node;
             return { ...node, data: { ...node.data, targets: [...targets, connection.target] } };
@@ -220,7 +222,7 @@ function BuilderContent() {
         });
       };
 
-      if ((data.type === "start" || data.type === "claude_agent" || data.type === "failed") && Array.isArray(data.targets)) {
+      if ((data.type === "start" || data.type === "claude_agent" || data.type === "failed" || data.type === "template") && Array.isArray(data.targets)) {
         syncEdges((data.targets as string[]).map((t) => ({ target: t })));
       }
 
@@ -259,6 +261,14 @@ function BuilderContent() {
           name: "New Condition",
           condition_field: "",
           branches: {},
+        },
+        template: {
+          id,
+          type,
+          name: "Sub-template",
+          template_id: null,
+          status_label: "",
+          targets: [],
         },
         end: { id, type, name: "Done", result_template: "" },
         failed: { id, type, name: "Failed", reason_template: "", targets: [] },
