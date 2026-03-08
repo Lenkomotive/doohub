@@ -124,8 +124,7 @@ async def _handle_claude_agent(node: dict, ctx: dict) -> str | None:
     prompt = resolve_template(prompt_template, ctx)
     model = node.get("model") or ctx.get("model", "claude-sonnet-4-6")
     timeout = node.get("timeout", 600)
-    retry_config = node.get("retry", {})
-    max_attempts = retry_config.get("max_attempts", 1)
+    max_attempts = 2  # always retry once on error
 
     # Determine which session to resume (if any)
     resume_from = node.get("resume_from")  # resume another node's session

@@ -204,17 +204,6 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
               />
             </Field>
 
-            <Field label="Max Retry Attempts">
-              <Input
-                type="number"
-                value={((data.retry as Record<string, number>)?.max_attempts) || 1}
-                onChange={(e) => update("retry", { max_attempts: Number(e.target.value) })}
-                className="h-7 text-xs"
-                min={1}
-                max={5}
-              />
-            </Field>
-
             <Field label="Status Label">
               <Input
                 value={(data.status_label as string) || ""}
