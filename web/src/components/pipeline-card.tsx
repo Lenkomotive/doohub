@@ -28,6 +28,7 @@ export function PipelineCard({
   onDelete,
   onCheckMergeStatus,
   onMerge,
+  onResolveConflicts,
 }: {
   pipeline: Pipeline;
   mergeStatus?: MergeStatus;
@@ -36,6 +37,7 @@ export function PipelineCard({
   onDelete: () => void;
   onCheckMergeStatus: () => void;
   onMerge: () => void;
+  onResolveConflicts: () => void;
 }) {
   const title =
     pipeline.issue_title ||
@@ -48,8 +50,6 @@ export function PipelineCard({
       onCheckMergeStatus();
     }
   }, [pipeline.status, pipeline.pr_number, mergeStatus, onCheckMergeStatus]);
-
-  const prConflictsUrl = pipeline.pr_url ? `${pipeline.pr_url}/conflicts` : null;
 
   return (
     <Card className="border-border/50 bg-card/50 transition-colors hover:bg-accent/50 cursor-pointer" onClick={onClick}>
@@ -121,12 +121,17 @@ export function PipelineCard({
             {!mergeStatus.checking && mergeStatus.already_merged && (
               <span className="text-muted-foreground">Already merged</span>
             )}
-            {!mergeStatus.checking && mergeStatus.has_conflicts && prConflictsUrl && (
-              <a href={prConflictsUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                <Button variant="outline" size="sm" className="h-6 text-xs border-orange-500 text-orange-500 hover:bg-orange-500/10">
-                  Resolve Conflicts
-                </Button>
-              </a>
+            {!mergeStatus.checking && mergeStatus.has_conflicts && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs border-orange-500 text-orange-500 hover:bg-orange-500/10"
+                disabled={mergeStatus.resolvingConflicts}
+                onClick={(e) => { e.stopPropagation(); onResolveConflicts(); }}
+              >
+                {mergeStatus.resolvingConflicts ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                {mergeStatus.resolvingConflicts ? "Starting..." : "Resolve Conflicts"}
+              </Button>
             )}
             {!mergeStatus.checking && mergeStatus.mergeable && !mergeStatus.has_conflicts && (
               <Button

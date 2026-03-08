@@ -42,6 +42,7 @@ export interface MergeStatus {
   already_merged: boolean;
   checking: boolean;
   merging: boolean;
+  resolvingConflicts?: boolean;
   error: string | null;
 }
 
