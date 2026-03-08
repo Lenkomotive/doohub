@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Pipeline, MergeStatus } from "@/store/pipelines";
 import { isActive } from "@/store/pipelines";
+import { PipelineActivity } from "@/components/pipeline-activity";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   planning: "default",
@@ -42,6 +43,7 @@ export function PipelineCard({
     pipeline.task_description ||
     `Pipeline ${pipeline.pipeline_key}`;
   const repoName = pipeline.repo_path.split("/").pop() || pipeline.repo_path;
+  const pipelineIsActive = isActive(pipeline.status);
 
   useEffect(() => {
     if (pipeline.status === "done" && pipeline.pr_number && !mergeStatus) {
@@ -56,9 +58,16 @@ export function PipelineCard({
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex-1 min-w-0 pr-2">
           <h3 className="text-sm font-medium truncate">{title}</h3>
-          {pipeline.issue_number && (
-            <span className="text-xs text-muted-foreground">#{pipeline.issue_number}</span>
-          )}
+          <div className="flex items-center gap-2 mt-0.5">
+            {pipeline.issue_number && (
+              <span className="text-xs text-muted-foreground">#{pipeline.issue_number}</span>
+            )}
+            <span className="text-xs text-muted-foreground">{repoName}</span>
+            <span className="text-xs text-muted-foreground">{pipeline.model}</span>
+            {pipeline.total_cost_usd > 0 && (
+              <span className="text-xs text-muted-foreground">${pipeline.total_cost_usd.toFixed(2)}</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <Badge variant={statusVariant[pipeline.status] || "secondary"}>
@@ -76,7 +85,7 @@ export function PipelineCard({
               </Button>
             </a>
           )}
-          {isActive(pipeline.status) && (
+          {pipelineIsActive && (
             <Button
               variant="ghost"
               size="icon"
@@ -96,50 +105,54 @@ export function PipelineCard({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span>{repoName}</span>
-        <span>{pipeline.model}</span>
-        {pipeline.total_cost_usd > 0 && (
-          <span>${pipeline.total_cost_usd.toFixed(2)}</span>
-        )}
-        {pipeline.error && (
-          <span className="text-destructive truncate max-w-xs">{pipeline.error}</span>
-        )}
 
-        {/* Merge controls for done pipelines */}
-        {pipeline.status === "done" && mergeStatus && (
-          <div className="ml-auto flex items-center gap-2">
-            {mergeStatus.checking && (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            )}
-            {!mergeStatus.checking && mergeStatus.already_merged && (
-              <span className="text-muted-foreground">Already merged</span>
-            )}
-            {!mergeStatus.checking && mergeStatus.has_conflicts && prConflictsUrl && (
-              <a href={prConflictsUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                <Button variant="outline" size="sm" className="h-6 text-xs border-orange-500 text-orange-500 hover:bg-orange-500/10">
-                  Resolve Conflicts
-                </Button>
-              </a>
-            )}
-            {!mergeStatus.checking && mergeStatus.mergeable && !mergeStatus.has_conflicts && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 text-xs border-green-500 text-green-500 hover:bg-green-500/10"
-                disabled={mergeStatus.merging}
-                onClick={(e) => { e.stopPropagation(); onMerge(); }}
-              >
-                {mergeStatus.merging ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <GitMerge className="h-3 w-3 mr-1" />}
-                Merge
+      {/* Live activity for active pipelines */}
+      {pipelineIsActive && pipeline.step_logs && pipeline.step_logs.length > 0 && (
+        <CardContent className="pt-0 pb-3">
+          <PipelineActivity steps={pipeline.step_logs} compact />
+        </CardContent>
+      )}
+
+      {/* Error display */}
+      {pipeline.error && (
+        <CardContent className="pt-0 pb-3">
+          <p className="text-xs text-destructive truncate">{pipeline.error}</p>
+        </CardContent>
+      )}
+
+      {/* Merge controls for done pipelines */}
+      {pipeline.status === "done" && mergeStatus && (
+        <CardContent className="pt-0 pb-3 flex items-center gap-2">
+          {mergeStatus.checking && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          )}
+          {!mergeStatus.checking && mergeStatus.already_merged && (
+            <span className="text-xs text-muted-foreground">Already merged</span>
+          )}
+          {!mergeStatus.checking && mergeStatus.has_conflicts && prConflictsUrl && (
+            <a href={prConflictsUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+              <Button variant="outline" size="sm" className="h-6 text-xs border-orange-500 text-orange-500 hover:bg-orange-500/10">
+                Resolve Conflicts
               </Button>
-            )}
-            {!mergeStatus.checking && mergeStatus.error && (
-              <span className="text-destructive text-xs truncate max-w-[200px]">{mergeStatus.error}</span>
-            )}
-          </div>
-        )}
-      </CardContent>
+            </a>
+          )}
+          {!mergeStatus.checking && mergeStatus.mergeable && !mergeStatus.has_conflicts && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-xs border-green-500 text-green-500 hover:bg-green-500/10"
+              disabled={mergeStatus.merging}
+              onClick={(e) => { e.stopPropagation(); onMerge(); }}
+            >
+              {mergeStatus.merging ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <GitMerge className="h-3 w-3 mr-1" />}
+              Merge
+            </Button>
+          )}
+          {!mergeStatus.checking && mergeStatus.error && (
+            <span className="text-destructive text-xs truncate max-w-[200px]">{mergeStatus.error}</span>
+          )}
+        </CardContent>
+      )}
     </Card>
   );
 }

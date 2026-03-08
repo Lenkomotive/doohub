@@ -213,9 +213,9 @@ export const usePipelinesStore = create<PipelinesState>((set, get) => ({
             if (update.step) {
               const logs = [...(pipeline.step_logs || [])];
               const existingIdx = logs.findIndex((s) => s.node_id === update.step!.node_id);
-              if (existingIdx >= 0 && update.step.status !== "running") {
+              if (existingIdx >= 0) {
                 logs[existingIdx] = update.step;
-              } else if (existingIdx < 0) {
+              } else {
                 logs.push(update.step);
               }
               pipeline.step_logs = logs;

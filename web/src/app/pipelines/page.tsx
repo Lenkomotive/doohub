@@ -50,18 +50,19 @@ function PipelinesContent() {
           <p className="text-sm text-muted-foreground">No pipelines</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="flex flex-wrap gap-3">
           {pipelines.map((pipeline) => (
-            <PipelineCard
-              key={pipeline.pipeline_key}
-              pipeline={pipeline}
-              mergeStatus={mergeStatuses[pipeline.pipeline_key]}
-              onClick={() => router.push(`/pipelines/${pipeline.pipeline_key}`)}
-              onCancel={() => cancelPipeline(pipeline.pipeline_key)}
-              onDelete={() => deletePipeline(pipeline.pipeline_key)}
-              onCheckMergeStatus={() => handleCheckMergeStatus(pipeline.pipeline_key)}
-              onMerge={() => handleMerge(pipeline.pipeline_key)}
-            />
+            <div key={pipeline.pipeline_key} className="w-80">
+              <PipelineCard
+                pipeline={pipeline}
+                mergeStatus={mergeStatuses[pipeline.pipeline_key]}
+                onClick={() => router.push(`/pipelines/${pipeline.pipeline_key}`)}
+                onCancel={() => cancelPipeline(pipeline.pipeline_key)}
+                onDelete={() => deletePipeline(pipeline.pipeline_key)}
+                onCheckMergeStatus={() => handleCheckMergeStatus(pipeline.pipeline_key)}
+                onMerge={() => handleMerge(pipeline.pipeline_key)}
+              />
+            </div>
           ))}
         </div>
       )}
