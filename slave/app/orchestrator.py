@@ -1,4 +1,4 @@
-"""Pipeline orchestrator — plan → develop → review state machine.
+"""Pipeline orchestrator — graph-based template executor.
 
 Triggered on-demand via HTTP. Reports progress to backend via callbacks.
 Tracks running pipelines in memory only (backend owns persistent state).
@@ -12,15 +12,12 @@ from pathlib import Path
 
 import httpx
 
-from app import claude_runner
-from app.agent_prompts import developer_prompt, planner_prompt, reviewer_prompt
 from app.config import settings
 from app.graph_executor import execute_graph
 
 logger = logging.getLogger(__name__)
 
 WORKTREE_DIR = settings.data_dir / "worktrees"
-MAX_REVIEW_ROUNDS = 3
 
 # pipeline_key -> asyncio.Task
 _tasks: dict[str, asyncio.Task] = {}
@@ -68,16 +65,6 @@ async def _callback(url: str, api_key: str, data: dict) -> None:
             logger.warning("Callback attempt %d failed: %s", attempt + 1, e)
         if attempt < 2:
             await asyncio.sleep(2 ** attempt)
-
-
-def _extract_pr_url(text: str) -> str | None:
-    match = re.search(r"https://github\.com/[^\s)]+/pull/\d+", text)
-    return match.group(0) if match else None
-
-
-def _extract_pr_number(url: str) -> int | None:
-    match = re.search(r"/pull/(\d+)", url)
-    return int(match.group(1)) if match else None
 
 
 def _slugify(text: str) -> str:
@@ -157,92 +144,10 @@ async def _cancel_cleanup(ctx: dict) -> None:
         await _run_git(repo_path, "push", "origin", "--delete", branch)
 
 
-# ── Agent Runners ────────────────────────────────────────────────────────────
+# ── Pipeline Executor ────────────────────────────────────────────────────────
 
 
-async def _run_planner(ctx: dict, worktree_path: str) -> str | None:
-    prompt = planner_prompt(
-        ctx.get("issue_number"),
-        ctx.get("issue_title", ""),
-        ctx.get("issue_body", ""),
-    )
-    result = await claude_runner.run_prompt(
-        prompt=prompt,
-        project_path=worktree_path,
-        model=ctx["model"],
-        timeout=600,
-        session_key=f"__orch_plan_{ctx['pipeline_key']}__",
-    )
-    if result.get("type") == "error":
-        logger.error("Planner failed: %s", result.get("error"))
-        return None
-    return result.get("result", "")
-
-
-async def _run_developer(ctx: dict, worktree_path: str, review_comments: str | None = None) -> str | None:
-    branch = ctx["branch"]
-    is_retry = ctx.get("review_round", 0) > 0
-
-    if is_retry:
-        await _run_git(worktree_path, "fetch", "origin")
-        await _run_git(worktree_path, "rebase", "origin/main")
-
-    prompt = developer_prompt(
-        ctx.get("issue_number"),
-        ctx.get("issue_title", ""),
-        ctx.get("issue_body", ""),
-        ctx.get("plan", "No plan available."),
-        branch,
-        review_comments,
-    )
-    result = await claude_runner.run_prompt(
-        prompt=prompt,
-        project_path=worktree_path,
-        model=ctx["model"],
-        timeout=900,
-        session_key=f"__orch_dev_{ctx['pipeline_key']}__",
-        claude_session_id=ctx.get("claude_session_id") if is_retry else None,
-    )
-    if result.get("type") == "error":
-        logger.error("Developer failed: %s", result.get("error"))
-        return None
-
-    ctx["claude_session_id"] = result.get("session_id")
-    ctx["cost_usd"] = ctx.get("cost_usd", 0) + (result.get("cost_usd") or 0)
-    return _extract_pr_url(result.get("result", ""))
-
-
-async def _run_reviewer(ctx: dict, worktree_path: str) -> str | None:
-    prompt = reviewer_prompt(
-        ctx.get("issue_number"),
-        ctx.get("issue_title", ""),
-        ctx["pr_number"],
-    )
-    result = await claude_runner.run_prompt(
-        prompt=prompt,
-        project_path=worktree_path,
-        model=ctx["model"],
-        timeout=600,
-        session_key=f"__orch_review_{ctx['pipeline_key']}__",
-    )
-    if result.get("type") == "error":
-        logger.error("Reviewer failed: %s", result.get("error"))
-        return None
-
-    ctx["cost_usd"] = ctx.get("cost_usd", 0) + (result.get("cost_usd") or 0)
-    text = result.get("result", "").upper()
-    if "APPROVED" in text and "CHANGES_REQUESTED" not in text:
-        return "APPROVED"
-    if "CHANGES_REQUESTED" in text:
-        return "CHANGES_REQUESTED"
-    logger.warning("Could not parse reviewer verdict: %s", text[:200])
-    return None
-
-
-# ── Pipeline State Machine ───────────────────────────────────────────────────
-
-
-async def _run_graph_pipeline(ctx: dict) -> None:
+async def _run_pipeline(ctx: dict) -> None:
     """Execute a pipeline using the graph executor with a template definition."""
     key = ctx["pipeline_key"]
     cb_url = ctx["callback_url"]
@@ -250,10 +155,10 @@ async def _run_graph_pipeline(ctx: dict) -> None:
     repo_path = ctx["repo_path"]
     definition = ctx["template_definition"]
 
-    logger.info("Pipeline %s: using graph executor (template: %s)", key, definition.get("name", "unnamed"))
+    logger.info("Pipeline %s: executing template '%s'", key, definition.get("name", "unnamed"))
 
-    # Fetch issue details if needed
-    if ctx.get("issue_number") and not ctx.get("issue_body"):
+    # Always fetch latest issue details from GitHub
+    if ctx.get("issue_number"):
         code, out = await _run_gh(
             repo_path, "issue", "view", str(ctx["issue_number"]),
             "--json", "title,body",
@@ -292,169 +197,6 @@ async def _run_graph_pipeline(ctx: dict) -> None:
 
         # Cleanup worktree on success
         await _cleanup_worktree(repo_path, worktree_path)
-
-    except asyncio.CancelledError:
-        logger.info("Pipeline %s cancelled — cleaning up", key)
-        await _cancel_cleanup(ctx)
-        await _callback(cb_url, api_key, {
-            "pipeline_key": key, "status": "cancelled",
-        })
-        raise
-    except Exception as e:
-        logger.error("Pipeline %s error: %s", key, e, exc_info=True)
-        slug = re.sub(r"[^a-z0-9]+", "-", key.lower()).strip("-")
-        await _cleanup_worktree(repo_path, str(WORKTREE_DIR / slug))
-        await _callback(cb_url, api_key, {
-            "pipeline_key": key, "status": "failed", "error": str(e),
-        })
-    finally:
-        _tasks.pop(key, None)
-
-
-async def _run_pipeline(ctx: dict) -> None:
-    """Execute the full plan → develop → review pipeline (legacy path)."""
-    key = ctx["pipeline_key"]
-    cb_url = ctx["callback_url"]
-    api_key = ctx["api_key"]
-    repo_path = ctx["repo_path"]
-
-    # Fetch issue details if we have an issue number but no body
-    if ctx.get("issue_number") and not ctx.get("issue_body"):
-        code, out = await _run_gh(
-            repo_path, "issue", "view", str(ctx["issue_number"]),
-            "--json", "title,body",
-        )
-        if code == 0 and out:
-            try:
-                data = json.loads(out)
-                ctx["issue_title"] = data.get("title", ctx.get("issue_title", ""))
-                ctx["issue_body"] = data.get("body", "")
-            except json.JSONDecodeError:
-                pass
-
-    # Build branch name
-    if ctx.get("issue_number"):
-        title_slug = _slugify(ctx.get("issue_title", "task"))
-        ctx["branch"] = f"doohub/issue-{ctx['issue_number']}-{title_slug}"
-    else:
-        ctx["branch"] = f"doohub/pipeline-{key}"
-
-    try:
-        # 1. Plan
-        await _callback(cb_url, api_key, {
-            "pipeline_key": key, "status": "planning", "step_log": "Starting planner agent",
-        })
-        worktree_path = await _ensure_worktree(repo_path, key, ctx["branch"])
-        if not worktree_path:
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "failed", "error": "Failed to create worktree",
-            })
-            return
-
-        plan = await _run_planner(ctx, worktree_path)
-        if not plan:
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "failed", "error": "Planner agent failed",
-            })
-            return
-
-        ctx["plan"] = plan
-
-        # Post plan as issue comment
-        if ctx.get("issue_number"):
-            await _run_gh(
-                worktree_path, "issue", "comment",
-                str(ctx["issue_number"]),
-                "--body", f"## Implementation Plan\n\n{plan}",
-            )
-
-        await _callback(cb_url, api_key, {
-            "pipeline_key": key, "status": "planned", "plan": plan,
-            "step_log": "Plan complete, starting developer",
-        })
-
-        # 2. Develop
-        await _callback(cb_url, api_key, {
-            "pipeline_key": key, "status": "developing",
-        })
-        pr_url = await _run_developer(ctx, worktree_path)
-        if not pr_url:
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "failed", "error": "Developer agent failed",
-            })
-            return
-
-        pr_number = _extract_pr_number(pr_url)
-        ctx["pr_number"] = pr_number
-        await _callback(cb_url, api_key, {
-            "pipeline_key": key, "status": "developed",
-            "pr_url": pr_url, "pr_number": pr_number,
-            "branch": ctx["branch"],
-            "claude_session_id": ctx.get("claude_session_id"),
-            "cost_usd": ctx.get("cost_usd", 0),
-            "step_log": f"PR opened: {pr_url}",
-        })
-
-        # 3. Review loop
-        for round_num in range(MAX_REVIEW_ROUNDS):
-            ctx["review_round"] = round_num
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "reviewing",
-                "step_log": f"Review round {round_num + 1}",
-            })
-
-            verdict = await _run_reviewer(ctx, worktree_path)
-            if not verdict:
-                await _callback(cb_url, api_key, {
-                    "pipeline_key": key, "status": "failed", "error": "Reviewer agent failed",
-                })
-                return
-
-            if verdict == "APPROVED":
-                await _callback(cb_url, api_key, {
-                    "pipeline_key": key, "status": "done",
-                    "cost_usd": ctx.get("cost_usd", 0),
-                    "step_log": "Review approved — PR ready to merge",
-                })
-                await _cleanup_worktree(repo_path, worktree_path)
-                return
-
-            # Changes requested — re-develop
-            review_comments = None
-            if pr_number:
-                code, out = await _run_gh(
-                    worktree_path, "pr", "view", str(pr_number),
-                    "--json", "reviews",
-                    "-q", '[.reviews[] | select(.state == "CHANGES_REQUESTED") | .body] | last',
-                )
-                if code == 0 and out:
-                    review_comments = out
-
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "developing",
-                "step_log": f"Changes requested (round {round_num + 1}/{MAX_REVIEW_ROUNDS})",
-            })
-
-            pr_url = await _run_developer(ctx, worktree_path, review_comments)
-            if not pr_url:
-                await _callback(cb_url, api_key, {
-                    "pipeline_key": key, "status": "failed",
-                    "error": f"Developer failed on review round {round_num + 1}",
-                })
-                return
-
-            await _callback(cb_url, api_key, {
-                "pipeline_key": key, "status": "developed",
-                "cost_usd": ctx.get("cost_usd", 0),
-                "step_log": f"Fixes pushed for round {round_num + 1}",
-            })
-
-        # Exhausted review rounds
-        await _callback(cb_url, api_key, {
-            "pipeline_key": key, "status": "failed",
-            "error": f"Max review rounds ({MAX_REVIEW_ROUNDS}) reached",
-            "cost_usd": ctx.get("cost_usd", 0),
-        })
 
     except asyncio.CancelledError:
         logger.info("Pipeline %s cancelled — cleaning up", key)
@@ -533,7 +275,7 @@ def start(
     model: str,
     callback_url: str,
     api_key: str,
-    template_definition: dict | None = None,
+    template_definition: dict,
 ) -> None:
     if pipeline_key in _tasks:
         raise ValueError(f"Pipeline {pipeline_key} is already running")
@@ -543,23 +285,16 @@ def start(
         "repo_path": repo_path,
         "issue_number": issue_number,
         "issue_title": task_description or "",
-        "issue_body": task_description or "",
         "task_description": task_description or "",
         "model": model,
         "callback_url": callback_url,
         "api_key": api_key,
         "cost_usd": 0,
+        "template_definition": template_definition,
     }
 
-    if template_definition:
-        ctx["template_definition"] = template_definition
-        logger.info("Pipeline %s: starting with template '%s'", pipeline_key, template_definition.get("name", "unnamed"))
-        runner = _run_graph_pipeline(ctx)
-    else:
-        logger.info("Pipeline %s: starting with legacy orchestrator", pipeline_key)
-        runner = _run_pipeline(ctx)
-
-    task = asyncio.create_task(runner, name=f"pipeline-{pipeline_key}")
+    logger.info("Pipeline %s: starting template '%s'", pipeline_key, template_definition.get("name", "unnamed"))
+    task = asyncio.create_task(_run_pipeline(ctx), name=f"pipeline-{pipeline_key}")
     _tasks[pipeline_key] = task
 
 

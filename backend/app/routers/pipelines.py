@@ -31,13 +31,13 @@ async def create_pipeline(
 ):
     pipeline_key = uuid4().hex[:12]
 
-    # Look up template definition if template_id is provided
-    template_definition = None
-    if body.template_id:
-        template = db.query(PipelineTemplate).filter(PipelineTemplate.id == body.template_id).first()
-        if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
-        template_definition = template.definition
+    # Look up template definition (required)
+    if not body.template_id:
+        raise HTTPException(status_code=400, detail="template_id is required")
+    template = db.query(PipelineTemplate).filter(PipelineTemplate.id == body.template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    template_definition = template.definition
 
     pipeline = Pipeline(
         user_id=user.id,

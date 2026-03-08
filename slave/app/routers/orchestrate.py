@@ -15,7 +15,7 @@ class StartPipelineRequest(BaseModel):
     task_description: str | None = None
     model: str = "claude-sonnet-4-6"
     callback_url: str
-    template_definition: dict | None = None
+    template_definition: dict
 
 
 @router.post("")
