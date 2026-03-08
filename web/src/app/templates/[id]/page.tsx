@@ -14,6 +14,7 @@ import {
   type Connection,
   type Node,
   type Edge,
+  type EdgeRemoveChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
@@ -69,7 +70,81 @@ function BuilderContent() {
   const [showContext, setShowContext] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
+
+  /** Remove references to deletedIds from all nodes' target fields */
+  const scrubNodeReferences = useCallback(
+    (deletedIds: Set<string>) => {
+      setNodes((nds) =>
+        nds.map((node) => {
+          const targets = node.data.targets as string[] | undefined;
+          const branches = node.data.branches as { value: string; target: string }[] | undefined;
+          const maxIterTarget = node.data.max_iterations_target as string | undefined;
+
+          const hasTarget = targets?.some((t) => deletedIds.has(t));
+          const hasBranch = branches?.some((b) => deletedIds.has(b.target));
+          const hasMaxIter = maxIterTarget ? deletedIds.has(maxIterTarget) : false;
+
+          if (!hasTarget && !hasBranch && !hasMaxIter) return node;
+
+          const newData = { ...node.data };
+          if (hasTarget) newData.targets = targets!.filter((t) => !deletedIds.has(t));
+          if (hasBranch) newData.branches = branches!.filter((b) => !deletedIds.has(b.target));
+          if (hasMaxIter) newData.max_iterations_target = "";
+          return { ...node, data: newData };
+        }),
+      );
+    },
+    [setNodes],
+  );
+
+  const onEdgesChange = useCallback(
+    (changes: Parameters<typeof onEdgesChangeBase>[0]) => {
+      const removals = changes.filter((c): c is EdgeRemoveChange => c.type === "remove");
+      if (removals.length > 0) {
+        for (const removal of removals) {
+          const edge = edges.find((e) => e.id === removal.id);
+          if (edge) {
+            const deletedTarget = edge.target;
+            setNodes((nds) =>
+              nds.map((node) => {
+                if (node.id !== edge.source) return node;
+
+                const targets = node.data.targets as string[] | undefined;
+                const branches = node.data.branches as { value: string; target: string }[] | undefined;
+                const maxIterTarget = node.data.max_iterations_target as string | undefined;
+
+                const newData = { ...node.data };
+                let changed = false;
+
+                if (targets?.includes(deletedTarget)) {
+                  newData.targets = targets.filter((t) => t !== deletedTarget);
+                  changed = true;
+                }
+                if (branches?.some((b) => b.target === deletedTarget)) {
+                  // If edge has a label, remove only the matching branch; otherwise remove all with that target
+                  if (edge.label) {
+                    newData.branches = branches.filter((b) => !(b.target === deletedTarget && b.value === edge.label));
+                  } else {
+                    newData.branches = branches.filter((b) => b.target !== deletedTarget);
+                  }
+                  changed = true;
+                }
+                if (maxIterTarget === deletedTarget) {
+                  newData.max_iterations_target = "";
+                  changed = true;
+                }
+
+                return changed ? { ...node, data: newData } : node;
+              }),
+            );
+          }
+        }
+      }
+      onEdgesChangeBase(changes);
+    },
+    [edges, onEdgesChangeBase, setNodes],
+  );
 
   useEffect(() => {
     async function load() {
@@ -206,8 +281,9 @@ function BuilderContent() {
     setEdges((eds) =>
       eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId),
     );
+    scrubNodeReferences(new Set([selectedNodeId]));
     setSelectedNodeId(null);
-  }, [selectedNodeId, setNodes, setEdges]);
+  }, [selectedNodeId, setNodes, setEdges, scrubNodeReferences]);
 
   const handleAutoLayout = useCallback(() => {
     const laid = autoLayout(nodes, edges);
