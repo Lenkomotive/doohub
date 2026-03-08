@@ -149,6 +149,17 @@ class _PipelineTile extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (pipeline.templateName != null)
+                  Row(
+                    children: [
+                      const Icon(Icons.description_outlined, size: 12, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        pipeline.templateName!,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
               ],
             ),
             trailing: _StatusBadge(status: pipeline.status),

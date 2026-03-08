@@ -313,6 +313,8 @@ def _serialize(p: Pipeline) -> dict:
         "model": p.model,
         "total_cost_usd": p.total_cost_usd,
         "step_logs": p.step_logs or [],
+        "template_id": p.template_id,
+        "template_name": p.template.name if p.template else None,
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
     }

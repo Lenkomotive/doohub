@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { ExternalLink, GitMerge, Loader2, Trash2, XCircle } from "lucide-react";
+import { ExternalLink, FileText, GitMerge, Loader2, Trash2, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,6 +99,12 @@ export function PipelineCard({
       <CardContent className="flex items-center gap-3 text-xs text-muted-foreground">
         <span>{repoName}</span>
         <span>{pipeline.model}</span>
+        {pipeline.template_name && (
+          <span className="flex items-center gap-1">
+            <FileText className="h-3 w-3" />
+            {pipeline.template_name}
+          </span>
+        )}
         {pipeline.total_cost_usd > 0 && (
           <span>${pipeline.total_cost_usd.toFixed(2)}</span>
         )}

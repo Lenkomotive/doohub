@@ -13,6 +13,8 @@ class Pipeline {
   final int reviewRound;
   final String model;
   final double totalCostUsd;
+  final int? templateId;
+  final String? templateName;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -31,6 +33,8 @@ class Pipeline {
     this.reviewRound = 0,
     required this.model,
     this.totalCostUsd = 0,
+    this.templateId,
+    this.templateName,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -51,6 +55,8 @@ class Pipeline {
       reviewRound: json['review_round'] ?? 0,
       model: json['model'] ?? 'sonnet',
       totalCostUsd: (json['total_cost_usd'] ?? 0).toDouble(),
+      templateId: json['template_id'],
+      templateName: json['template_name'],
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
     );
@@ -81,6 +87,8 @@ class Pipeline {
       reviewRound: reviewRound ?? this.reviewRound,
       model: model,
       totalCostUsd: totalCostUsd ?? this.totalCostUsd,
+      templateId: templateId,
+      templateName: templateName,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );
