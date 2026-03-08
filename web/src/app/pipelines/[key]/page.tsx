@@ -28,12 +28,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { AppShell } from "@/components/app-shell";
 import { usePipelinesStore, isActive } from "@/store/pipelines";
 import type { Pipeline, StepLog } from "@/store/pipelines";
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
+import { formatTokens } from "@/lib/utils";
 
 const stepNodeIcon: Record<string, React.ElementType> = {
   start: Play,

@@ -7,12 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Pipeline, MergeStatus } from "@/store/pipelines";
 import { isActive } from "@/store/pipelines";
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
+import { PipelineActivity } from "@/components/pipeline-activity";
+import { formatTokens } from "@/lib/utils";
 
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   planning: "default",
@@ -149,6 +145,13 @@ export function PipelineCard({
           </div>
         )}
       </CardContent>
+
+      {/* Live step activity for active pipelines */}
+      {isActive(pipeline.status) && pipeline.step_logs && pipeline.step_logs.length > 0 && (
+        <CardContent className="pt-0 pb-3">
+          <PipelineActivity steps={pipeline.step_logs} compact />
+        </CardContent>
+      )}
     </Card>
   );
 }
