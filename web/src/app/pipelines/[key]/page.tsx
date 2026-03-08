@@ -29,6 +29,12 @@ import { AppShell } from "@/components/app-shell";
 import { usePipelinesStore, isActive } from "@/store/pipelines";
 import type { Pipeline, StepLog } from "@/store/pipelines";
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
 const stepNodeIcon: Record<string, React.ElementType> = {
   start: Play,
   end: Flag,
@@ -243,6 +249,18 @@ function PipelineDetail() {
                 <span className="text-muted-foreground">Cost</span>
                 <p className="font-medium">${pipeline.total_cost_usd.toFixed(2)}</p>
               </div>
+            )}
+            {(pipeline.input_tokens > 0 || pipeline.output_tokens > 0) && (
+              <>
+                <div>
+                  <span className="text-muted-foreground">Input tokens</span>
+                  <p className="font-medium">{formatTokens(pipeline.input_tokens)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Output tokens</span>
+                  <p className="font-medium">{formatTokens(pipeline.output_tokens)}</p>
+                </div>
+              </>
             )}
             <div>
               <span className="text-muted-foreground">Review round</span>

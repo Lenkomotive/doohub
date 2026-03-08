@@ -31,6 +31,8 @@ class PipelineCallbackRequest(BaseModel):
     pr_url: str | None = None
     error: str | None = None
     cost_usd: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
     claude_session_id: str | None = None
     step_log: str | None = None
     step: StepLog | None = None

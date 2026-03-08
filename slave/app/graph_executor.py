@@ -160,10 +160,12 @@ async def _handle_claude_agent(node: dict, ctx: dict) -> str | None:
             ctx[f"_error_{node_id}"] = error_msg
             return None
 
-        # Store session per node and track cost
+        # Store session per node and track cost/tokens
         if result.get("session_id"):
             ctx[f"_session_{node_id}"] = result["session_id"]
         ctx["cost_usd"] = ctx.get("cost_usd", 0) + (result.get("cost_usd") or 0)
+        ctx["input_tokens"] = ctx.get("input_tokens", 0) + (result.get("input_tokens") or 0)
+        ctx["output_tokens"] = ctx.get("output_tokens", 0) + (result.get("output_tokens") or 0)
 
         return result.get("result", "")
 
@@ -347,6 +349,8 @@ async def execute_graph(
                 "pipeline_key": key,
                 "status": "done",
                 "cost_usd": ctx.get("cost_usd", 0),
+                "input_tokens": ctx.get("input_tokens", 0),
+                "output_tokens": ctx.get("output_tokens", 0),
                 "step_log": f"Pipeline done: {node_name}" + (f" — {result_msg}" if result_msg else ""),
                 "step": _make_step(node, "completed", pipeline_start, output=result_msg or None),
             })
@@ -370,6 +374,8 @@ async def execute_graph(
                     "pipeline_key": key,
                     "status": node.get("status_label", "failed"),
                     "cost_usd": ctx.get("cost_usd", 0),
+                    "input_tokens": ctx.get("input_tokens", 0),
+                    "output_tokens": ctx.get("output_tokens", 0),
                     "step_log": f"Failed: {node_name}" + (f" — {reason}" if reason else "") + f", continuing to {next_id}",
                     "step": fail_step,
                 })
@@ -381,6 +387,8 @@ async def execute_graph(
                 "status": "failed",
                 "error": reason or f"Pipeline failed at: {node_name}",
                 "cost_usd": ctx.get("cost_usd", 0),
+                "input_tokens": ctx.get("input_tokens", 0),
+                "output_tokens": ctx.get("output_tokens", 0),
                 "step_log": f"Pipeline failed: {node_name}" + (f" — {reason}" if reason else ""),
                 "step": fail_step,
             })
@@ -416,6 +424,8 @@ async def execute_graph(
                     "status": "failed",
                     "error": f"Agent '{node_name}' failed: {agent_error}",
                     "cost_usd": ctx.get("cost_usd", 0),
+                    "input_tokens": ctx.get("input_tokens", 0),
+                    "output_tokens": ctx.get("output_tokens", 0),
                     "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error=agent_error),
                 })
                 return
@@ -455,6 +465,8 @@ async def execute_graph(
                 "pipeline_key": key,
                 "status": status_label or "running",
                 "cost_usd": ctx.get("cost_usd", 0),
+                "input_tokens": ctx.get("input_tokens", 0),
+                "output_tokens": ctx.get("output_tokens", 0),
                 "step_log": f"[{visited_count}/{total_nodes}] {node_name} completed in {node_duration:.1f}s",
                 "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso, output=output_summary),
                 **{k: ctx.get(k) for k in ["pr_url", "pr_number", "branch", "claude_session_id", "issue_title"] if ctx.get(k)},
@@ -472,6 +484,8 @@ async def execute_graph(
                     "status": "failed",
                     "error": f"Condition '{node_name}' has no valid branch",
                     "cost_usd": ctx.get("cost_usd", 0),
+                    "input_tokens": ctx.get("input_tokens", 0),
+                    "output_tokens": ctx.get("output_tokens", 0),
                 })
                 return
 
@@ -504,4 +518,6 @@ async def execute_graph(
         "status": "failed",
         "error": "Pipeline ended without reaching an end node",
         "cost_usd": ctx.get("cost_usd", 0),
+        "input_tokens": ctx.get("input_tokens", 0),
+        "output_tokens": ctx.get("output_tokens", 0),
     })

@@ -29,6 +29,8 @@ export interface Pipeline {
   review_round: number;
   model: string;
   total_cost_usd: number;
+  input_tokens: number;
+  output_tokens: number;
   step_logs: StepLog[];
   created_at: string;
   updated_at: string;

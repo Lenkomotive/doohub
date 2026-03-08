@@ -26,6 +26,8 @@ class Pipeline(Base):
     review_round: Mapped[int] = mapped_column(Integer, default=0)
     model: Mapped[str] = mapped_column(String(50), default="claude-opus-4-6")
     total_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     claude_session_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     step_logs: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=list)
     template_id: Mapped[int | None] = mapped_column(

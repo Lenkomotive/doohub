@@ -306,6 +306,8 @@ async def _run_developer(ctx: dict, worktree_path: str, review_comments: str | N
 
     ctx["claude_session_id"] = result.get("session_id")
     ctx["cost_usd"] = ctx.get("cost_usd", 0) + (result.get("cost_usd") or 0)
+    ctx["input_tokens"] = ctx.get("input_tokens", 0) + (result.get("input_tokens") or 0)
+    ctx["output_tokens"] = ctx.get("output_tokens", 0) + (result.get("output_tokens") or 0)
     return _extract_pr_url(result.get("result", ""))
 
 
@@ -327,6 +329,8 @@ async def _run_reviewer(ctx: dict, worktree_path: str) -> str | None:
         return None
 
     ctx["cost_usd"] = ctx.get("cost_usd", 0) + (result.get("cost_usd") or 0)
+    ctx["input_tokens"] = ctx.get("input_tokens", 0) + (result.get("input_tokens") or 0)
+    ctx["output_tokens"] = ctx.get("output_tokens", 0) + (result.get("output_tokens") or 0)
     text = result.get("result", "").upper()
     if "APPROVED" in text and "CHANGES_REQUESTED" not in text:
         return "APPROVED"
@@ -553,6 +557,8 @@ async def _run_pipeline(ctx: dict) -> None:
             "branch": ctx["branch"],
             "claude_session_id": ctx.get("claude_session_id"),
             "cost_usd": ctx.get("cost_usd", 0),
+            "input_tokens": ctx.get("input_tokens", 0),
+            "output_tokens": ctx.get("output_tokens", 0),
             "step_log": f"PR opened: {pr_url}",
         })
 
@@ -575,6 +581,8 @@ async def _run_pipeline(ctx: dict) -> None:
                 await _callback(cb_url, api_key, {
                     "pipeline_key": key, "status": "done",
                     "cost_usd": ctx.get("cost_usd", 0),
+                    "input_tokens": ctx.get("input_tokens", 0),
+                    "output_tokens": ctx.get("output_tokens", 0),
                     "step_log": "Review approved — PR ready to merge",
                 })
                 await _cleanup_worktree(repo_path, worktree_path)
@@ -607,6 +615,8 @@ async def _run_pipeline(ctx: dict) -> None:
             await _callback(cb_url, api_key, {
                 "pipeline_key": key, "status": "developed",
                 "cost_usd": ctx.get("cost_usd", 0),
+                "input_tokens": ctx.get("input_tokens", 0),
+                "output_tokens": ctx.get("output_tokens", 0),
                 "step_log": f"Fixes pushed for round {round_num + 1}",
             })
 
@@ -615,6 +625,8 @@ async def _run_pipeline(ctx: dict) -> None:
             "pipeline_key": key, "status": "failed",
             "error": f"Max review rounds ({MAX_REVIEW_ROUNDS}) reached",
             "cost_usd": ctx.get("cost_usd", 0),
+            "input_tokens": ctx.get("input_tokens", 0),
+            "output_tokens": ctx.get("output_tokens", 0),
         })
 
     except asyncio.CancelledError:

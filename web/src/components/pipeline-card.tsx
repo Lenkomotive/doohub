@@ -8,6 +8,12 @@ import { Button } from "@/components/ui/button";
 import type { Pipeline, MergeStatus } from "@/store/pipelines";
 import { isActive } from "@/store/pipelines";
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
 const statusVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   checking_dependencies: "default",
   blocked: "destructive",
@@ -103,6 +109,9 @@ export function PipelineCard({
         <span>{pipeline.model}</span>
         {pipeline.total_cost_usd > 0 && (
           <span>${pipeline.total_cost_usd.toFixed(2)}</span>
+        )}
+        {(pipeline.input_tokens > 0 || pipeline.output_tokens > 0) && (
+          <span>{formatTokens(pipeline.input_tokens + pipeline.output_tokens)} tokens</span>
         )}
         {pipeline.error && (
           <span className="text-destructive truncate max-w-xs">{pipeline.error}</span>

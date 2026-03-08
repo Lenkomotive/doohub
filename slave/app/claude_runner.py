@@ -151,9 +151,19 @@ async def run_prompt(
     logger.info("Claude finished in %.1fs session=%s", duration, session_key)
     raw = stdout.decode("utf-8", errors="replace").strip()
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
     except json.JSONDecodeError:
         return {"type": "result", "result": raw.strip(), "session_id": claude_session_id}
+
+    # Normalize token usage from Claude CLI's usage object
+    usage = parsed.get("usage") or {}
+    parsed["input_tokens"] = (
+        usage.get("input_tokens", 0)
+        + usage.get("cache_read_input_tokens", 0)
+        + usage.get("cache_creation_input_tokens", 0)
+    )
+    parsed["output_tokens"] = usage.get("output_tokens", 0)
+    return parsed
 
 
 async def stream_prompt(
@@ -190,6 +200,8 @@ async def stream_prompt(
     result_text = ""
     new_session_id = claude_session_id
     cost_usd = None
+    input_tokens = 0
+    output_tokens = 0
 
     try:
         deadline = asyncio.get_event_loop().time() + timeout
@@ -218,6 +230,14 @@ async def stream_prompt(
             elif etype == "result":
                 new_session_id = event.get("session_id", new_session_id)
                 cost_usd = event.get("cost_usd")
+                # Extract token usage
+                usage = event.get("usage") or {}
+                input_tokens = (
+                    usage.get("input_tokens", 0)
+                    + usage.get("cache_read_input_tokens", 0)
+                    + usage.get("cache_creation_input_tokens", 0)
+                )
+                output_tokens = usage.get("output_tokens", 0)
                 result_text = event.get("result", result_text).strip()
 
         await proc.wait()
@@ -243,6 +263,8 @@ async def stream_prompt(
         "result": result_text,
         "session_id": new_session_id,
         "cost_usd": cost_usd,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
     }
 
 

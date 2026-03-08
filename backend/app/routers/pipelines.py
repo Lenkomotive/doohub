@@ -246,6 +246,10 @@ async def pipeline_callback(
         pipeline.error = body.error
     if body.cost_usd is not None:
         pipeline.total_cost_usd += body.cost_usd
+    if body.input_tokens is not None:
+        pipeline.input_tokens += body.input_tokens
+    if body.output_tokens is not None:
+        pipeline.output_tokens += body.output_tokens
     if body.claude_session_id is not None:
         pipeline.claude_session_id = body.claude_session_id
 
@@ -312,6 +316,8 @@ def _serialize(p: Pipeline) -> dict:
         "review_round": p.review_round,
         "model": p.model,
         "total_cost_usd": p.total_cost_usd,
+        "input_tokens": p.input_tokens,
+        "output_tokens": p.output_tokens,
         "step_logs": p.step_logs or [],
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
