@@ -3,10 +3,12 @@ from typing import Any
 
 from pydantic import BaseModel, field_validator
 
-ALLOWED_NODE_TYPES = {"start", "end", "failed", "claude_agent", "condition"}
+ALLOWED_NODE_TYPES = {"start", "end", "failed", "claude_agent", "condition", "template"}
 
 
-def _validate_definition(definition: dict[str, Any]) -> dict[str, Any]:
+def _validate_definition(
+    definition: dict[str, Any], *, current_template_id: int | None = None
+) -> dict[str, Any]:
     required_keys = {"version", "name", "nodes", "edges"}
     missing = required_keys - definition.keys()
     if missing:
@@ -29,6 +31,14 @@ def _validate_definition(definition: dict[str, Any]) -> dict[str, Any]:
                 f"Node '{node['id']}' has invalid type '{node['type']}'. "
                 f"Allowed: {', '.join(sorted(ALLOWED_NODE_TYPES))}"
             )
+        if node["type"] == "template":
+            tid = node.get("template_id")
+            if not tid:
+                raise ValueError(f"Node '{node['id']}' of type 'template' missing 'template_id'")
+            if current_template_id is not None and tid == current_template_id:
+                raise ValueError(
+                    f"Node '{node['id']}' references its own template (circular reference)"
+                )
         node_ids.add(node["id"])
 
     edges = definition["edges"]

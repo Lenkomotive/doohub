@@ -18,11 +18,18 @@ const PIPELINE_VARS = [
   "model",
 ];
 
+interface TemplateOption {
+  id: number;
+  name: string;
+}
+
 interface ConfigPanelProps {
   node: Node;
   allNodes: Node[];
   onUpdate: (id: string, data: Record<string, unknown>) => void;
   onClose: () => void;
+  availableTemplates?: TemplateOption[];
+  currentTemplateId?: number;
 }
 
 type OutputDef = { name: string; values: string[] };
@@ -41,7 +48,7 @@ function branchesToRecord(branches: Branch[]): Record<string, string> {
   return record;
 }
 
-export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelProps) {
+export function ConfigPanel({ node, allNodes, onUpdate, onClose, availableTemplates, currentTemplateId }: ConfigPanelProps) {
   const { data } = node;
   const nodeType = node.type || data.type;
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -308,6 +315,54 @@ export function ConfigPanel({ node, allNodes, onUpdate, onClose }: ConfigPanelPr
                 Resume own session on re-entry
               </label>
             </div>
+
+            <Separator />
+
+            <NextNodes
+              targets={(data.targets as string[]) || []}
+              allNodes={allNodes}
+              currentNodeId={node.id}
+              onUpdate={(targets) => update("targets", targets)}
+            />
+          </>
+        )}
+
+        {/* Template node */}
+        {nodeType === "template" && (
+          <>
+            <Field label="Template">
+              <select
+                value={(data.template_id as number) || ""}
+                onChange={(e) => {
+                  const selectedId = e.target.value ? Number(e.target.value) : null;
+                  const selected = availableTemplates?.find((t) => t.id === selectedId);
+                  onUpdate(node.id, {
+                    ...data,
+                    template_id: selectedId,
+                    template_name: selected?.name || "",
+                  });
+                }}
+                className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Select template…</option>
+                {(availableTemplates || [])
+                  .filter((t) => t.id !== currentTemplateId)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+
+            <Field label="Status Label">
+              <Input
+                value={(data.status_label as string) || ""}
+                onChange={(e) => update("status_label", e.target.value)}
+                className="h-7 text-xs"
+                placeholder="e.g. refining issue"
+              />
+            </Field>
 
             <Separator />
 

@@ -12,10 +12,36 @@ from app.schemas.pipeline_template import (
     PipelineTemplateCreate,
     PipelineTemplateResponse,
     PipelineTemplateUpdate,
+    _validate_definition,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["pipeline-templates"])
+
+
+def _check_circular_refs(
+    db: DBSession, definition: dict, current_id: int, visited: set[int] | None = None
+) -> None:
+    """Recursively check that template node references don't form cycles."""
+    if visited is None:
+        visited = {current_id}
+    for node in definition.get("nodes", []):
+        if node.get("type") != "template":
+            continue
+        ref_id = node.get("template_id")
+        if not ref_id:
+            continue
+        if ref_id in visited:
+            raise ValueError(
+                f"Circular template reference detected: template {ref_id} "
+                f"is already in the reference chain"
+            )
+        ref = db.query(PipelineTemplate).filter(PipelineTemplate.id == ref_id).first()
+        if not ref:
+            raise ValueError(f"Node '{node['id']}' references template {ref_id} which does not exist")
+        visited.add(ref_id)
+        _check_circular_refs(db, ref.definition, current_id, visited)
+        visited.discard(ref_id)
 
 
 @router.get("/pipeline-templates", response_model=list[PipelineTemplateResponse])
@@ -79,6 +105,8 @@ def update_template(
         template.description = body.description
 
     if body.definition is not None:
+        _validate_definition(body.definition, current_template_id=template_id)
+        _check_circular_refs(db, body.definition, template_id)
         template.definition = body.definition
 
     db.commit()
@@ -103,6 +131,16 @@ def delete_template(
             status_code=409,
             detail="Cannot delete template: it is referenced by existing pipelines",
         )
+
+    # Check if any other template references this one as a nested template node
+    all_templates = db.query(PipelineTemplate).filter(PipelineTemplate.id != template_id).all()
+    for t in all_templates:
+        for node in (t.definition or {}).get("nodes", []):
+            if node.get("type") == "template" and node.get("template_id") == template_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Cannot delete template: it is referenced as a node in template '{t.name}'",
+                )
 
     db.delete(template)
     db.commit()

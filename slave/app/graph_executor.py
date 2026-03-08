@@ -225,12 +225,75 @@ async def _handle_condition(node: dict, ctx: dict) -> str | None:
     return next_node
 
 
+async def _handle_template(node: dict, ctx: dict) -> str | None:
+    """Template node — execute a referenced template's graph recursively."""
+    key = ctx["pipeline_key"]
+    node_id = node["id"]
+    template_id = node.get("template_id")
+
+    if not template_id:
+        logger.error("Pipeline %s: template node '%s' missing template_id", key, node_id)
+        ctx[f"_error_{node_id}"] = "Template node missing template_id"
+        return None
+
+    template_loader = ctx.get("_template_loader")
+    if not template_loader:
+        logger.error("Pipeline %s: no template_loader available for template node '%s'", key, node_id)
+        ctx[f"_error_{node_id}"] = "No template loader configured"
+        return None
+
+    depth = ctx.get("_template_depth", 0)
+    if depth >= 5:
+        logger.error("Pipeline %s: template nesting depth exceeded at node '%s'", key, node_id)
+        ctx[f"_error_{node_id}"] = "Template nesting depth limit (5) exceeded"
+        return None
+
+    # Fetch the referenced template definition
+    definition = await template_loader(template_id)
+    if not definition:
+        logger.error("Pipeline %s: template %d not found for node '%s'", key, template_id, node_id)
+        ctx[f"_error_{node_id}"] = f"Referenced template {template_id} not found"
+        return None
+
+    # Execute nested graph with shared context
+    ctx["_template_depth"] = depth + 1
+    callback = ctx.get("_callback")
+
+    async def nested_callback(data: dict) -> None:
+        # Prefix step logs with the template node name for clarity
+        if callback and "step_log" in data:
+            node_name = node.get("name", node_id)
+            data["step_log"] = f"[{node_name}] {data['step_log']}"
+        if callback:
+            # Don't propagate terminal statuses from nested template
+            if data.get("status") in ("done", "failed"):
+                data = {**data, "status": "running"}
+            await callback(data)
+
+    await execute_graph(definition, ctx, nested_callback)
+    ctx["_template_depth"] = depth
+
+    # Check if nested template failed
+    if ctx.get("_fail_reason"):
+        fail_reason = ctx.pop("_fail_reason")
+        ctx[f"_error_{node_id}"] = f"Nested template failed: {fail_reason}"
+        return None
+
+    # Capture nested end result
+    end_result = ctx.pop("_end_result", None)
+    if end_result:
+        ctx[f"_raw_{node_id}"] = end_result
+
+    return "success"
+
+
 _NODE_HANDLERS = {
     "start": _handle_start,
     "end": _handle_end,
     "failed": _handle_failed,
     "claude_agent": _handle_claude_agent,
     "condition": _handle_condition,
+    "template": _handle_template,
 }
 
 
@@ -308,6 +371,7 @@ async def execute_graph(
         callback: Async function(data: dict) to report status updates.
     """
     key = ctx["pipeline_key"]
+    ctx["_callback"] = callback
     node_map = _build_node_map(definition)
     edge_map = _build_edge_map(definition)
 
@@ -476,6 +540,28 @@ async def execute_graph(
             })
 
             # Follow to next node
+            current_id = _get_next_node(node, edge_map)
+
+        elif node_type == "template":
+            if result is None:
+                template_error = ctx.get(f"_error_{current_id}", "Nested template failed")
+                logger.error("Pipeline %s: %s template failed: %s", key, current_id, template_error)
+                await callback({
+                    "pipeline_key": key,
+                    "status": "failed",
+                    "error": f"Template '{node_name}' failed: {template_error}",
+                    "cost_usd": ctx.get("cost_usd", 0),
+                    "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error=template_error),
+                })
+                return
+
+            await callback({
+                "pipeline_key": key,
+                "status": status_label or "running",
+                "cost_usd": ctx.get("cost_usd", 0),
+                "step_log": f"[{visited_count}/{total_nodes}] {node_name} completed in {node_duration:.1f}s",
+                "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso),
+            })
             current_id = _get_next_node(node, edge_map)
 
         elif node_type == "condition":

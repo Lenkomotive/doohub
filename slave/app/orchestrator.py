@@ -189,6 +189,22 @@ async def _run_pipeline(ctx: dict) -> None:
 
         ctx["worktree_path"] = worktree_path
 
+        # Template loader for nested template nodes
+        async def template_loader(template_id: int) -> dict | None:
+            base_url = cb_url.rsplit("/pipelines/", 1)[0]
+            url = f"{base_url}/pipeline-templates/{template_id}"
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.get(url, headers={"X-API-Key": api_key})
+                    if resp.status_code == 200:
+                        return resp.json().get("definition")
+                    logger.warning("Template loader: %d returned %d", template_id, resp.status_code)
+            except Exception as e:
+                logger.error("Template loader failed for %d: %s", template_id, e)
+            return None
+
+        ctx["_template_loader"] = template_loader
+
         # Run the graph
         async def cb(data: dict) -> None:
             await _callback(cb_url, api_key, data)

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 const NODE_OPTIONS = [
   { type: "claude_agent", label: "Agent" },
   { type: "condition", label: "Condition" },
+  { type: "template", label: "Template" },
   { type: "end", label: "Done" },
   { type: "failed", label: "Failed" },
 ] as const;

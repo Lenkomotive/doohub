@@ -30,6 +30,7 @@ import { EndNode } from "@/components/builder/end-node";
 import { FailedNode } from "@/components/builder/failed-node";
 import { AgentNode } from "@/components/builder/agent-node";
 import { ConditionNode } from "@/components/builder/condition-node";
+import { TemplateNode } from "@/components/builder/template-node";
 import { ConfigPanel } from "@/components/builder/config-panel";
 import { ContextPanel } from "@/components/builder/context-panel";
 import { Toolbar } from "@/components/builder/toolbar";
@@ -53,6 +54,7 @@ const nodeTypes = {
   failed: FailedNode,
   claude_agent: AgentNode,
   condition: ConditionNode,
+  template: TemplateNode,
 };
 
 function BuilderContent() {
@@ -68,6 +70,7 @@ function BuilderContent() {
   const [error, setError] = useState("");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [showContext, setShowContext] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState<{ id: number; name: string }[]>([]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChangeBase] = useEdgesState<Edge>([]);
@@ -148,13 +151,20 @@ function BuilderContent() {
 
   useEffect(() => {
     async function load() {
-      const res = await apiFetch(`/pipeline-templates/${templateId}`);
+      const [res, templatesRes] = await Promise.all([
+        apiFetch(`/pipeline-templates/${templateId}`),
+        apiFetch("/pipeline-templates"),
+      ]);
       if (res.ok) {
         const data = await res.json();
         setTemplate(data);
         const flow = definitionToFlow(data.definition);
         setNodes(flow.nodes);
         setEdges(flow.edges);
+      }
+      if (templatesRes.ok) {
+        const all = await templatesRes.json();
+        setAvailableTemplates(all.map((t: { id: number; name: string }) => ({ id: t.id, name: t.name })));
       }
       setLoading(false);
     }
@@ -173,7 +183,7 @@ function BuilderContent() {
             if (branches.some((b) => b.target === connection.target)) return node;
             return { ...node, data: { ...node.data, branches: [...branches, { value: "", target: connection.target }] } };
           }
-          if (type === "start" || type === "claude_agent" || type === "failed") {
+          if (type === "start" || type === "claude_agent" || type === "failed" || type === "template") {
             const targets = (node.data.targets as string[]) || [];
             if (targets.includes(connection.target)) return node;
             return { ...node, data: { ...node.data, targets: [...targets, connection.target] } };
@@ -220,7 +230,7 @@ function BuilderContent() {
         });
       };
 
-      if ((data.type === "start" || data.type === "claude_agent" || data.type === "failed") && Array.isArray(data.targets)) {
+      if ((data.type === "start" || data.type === "claude_agent" || data.type === "failed" || data.type === "template") && Array.isArray(data.targets)) {
         syncEdges((data.targets as string[]).map((t) => ({ target: t })));
       }
 
@@ -260,6 +270,7 @@ function BuilderContent() {
           condition_field: "",
           branches: {},
         },
+        template: { id, type, name: "New Template", template_id: null, template_name: "", targets: [], status_label: "" },
         end: { id, type, name: "Done", result_template: "" },
         failed: { id, type, name: "Failed", reason_template: "", targets: [] },
       };
@@ -463,6 +474,8 @@ function BuilderContent() {
             allNodes={nodes}
             onUpdate={handleNodeUpdate}
             onClose={() => setSelectedNodeId(null)}
+            availableTemplates={availableTemplates}
+            currentTemplateId={templateId}
           />
         )}
         {showContext && (
