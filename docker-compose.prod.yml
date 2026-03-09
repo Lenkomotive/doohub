@@ -28,8 +28,8 @@ services:
     env_file: .env.slave
     restart: unless-stopped
     volumes:
+      - slave-home:/home/claude
       - slave-projects:/projects
-      - slave-claude:/home/claude/.claude
       - /opt/shared/doohub-ops-key:/home/claude/.ssh/doohub-ops-key:ro
     networks:
       - doohub-net
@@ -78,4 +78,4 @@ networks:
 volumes:
   pgdata:
   slave-projects:
-  slave-claude:
+  slave-home:
