@@ -10,7 +10,7 @@ class Session {
   final String model;
   final String projectPath;
   final String? claudeSessionId;
-  final bool interactive;
+  final String mode;
   final List<Message> messages;
   final bool sending;
   final ChatStatus chatStatus;
@@ -23,7 +23,7 @@ class Session {
     required this.model,
     required this.projectPath,
     this.claudeSessionId,
-    required this.interactive,
+    required this.mode,
     this.messages = const [],
     this.sending = false,
     this.chatStatus = ChatStatus.initial,
@@ -38,7 +38,7 @@ class Session {
       model: json['model'] ?? '',
       projectPath: json['project_path'] ?? '',
       claudeSessionId: json['claude_session_id'],
-      interactive: json['interactive'] ?? false,
+      mode: json['mode'] ?? 'oneshot',
     );
   }
 
@@ -56,7 +56,7 @@ class Session {
       model: model,
       projectPath: projectPath,
       claudeSessionId: claudeSessionId,
-      interactive: interactive,
+      mode: mode,
       messages: messages ?? this.messages,
       sending: sending ?? this.sending,
       chatStatus: chatStatus ?? this.chatStatus,

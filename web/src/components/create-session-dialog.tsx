@@ -19,11 +19,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
+import type { SessionMode } from "@/store/sessions";
 
 const models = [
   { value: "opus", label: "Opus" },
   { value: "sonnet", label: "Sonnet" },
   { value: "haiku", label: "Haiku" },
+];
+
+const modes: { value: SessionMode; label: string; desc: string }[] = [
+  { value: "oneshot", label: "Oneshot", desc: "Fire & forget, full autonomy" },
+  { value: "freeform", label: "Freeform", desc: "Interactive back-and-forth" },
+  { value: "planning", label: "Planning", desc: "Analyze & plan, no writes" },
+  { value: "analysis", label: "Analysis", desc: "Read-only code exploration" },
 ];
 
 interface Repo {
@@ -40,6 +48,7 @@ export function CreateSessionDialog({
   const [repos, setRepos] = useState<Repo[]>([]);
   const [model, setModel] = useState("opus");
   const [repoPath, setRepoPath] = useState("");
+  const [mode, setMode] = useState<SessionMode>("oneshot");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -62,6 +71,7 @@ export function CreateSessionDialog({
       method: "POST",
       body: JSON.stringify({
         model,
+        mode,
         ...(repoPath && repoPath !== "general" ? { project_path: repoPath } : {}),
       }),
     });
@@ -71,6 +81,7 @@ export function CreateSessionDialog({
       setOpen(false);
       setModel("opus");
       setRepoPath("");
+      setMode("oneshot");
       onCreated(session.session_key);
     } else {
       const data = await res.json();
@@ -91,6 +102,28 @@ export function CreateSessionDialog({
           <DialogTitle>New Session</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Mode */}
+          <div className="space-y-2">
+            <Label>Mode</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {modes.map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => setMode(m.value)}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                    mode === m.value
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border/50 hover:bg-accent/50"
+                  }`}
+                >
+                  <div className="font-medium">{m.label}</div>
+                  <div className="text-[11px] text-muted-foreground">{m.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Model */}
           <div className="space-y-2">
             <Label>Model</Label>
             <Select value={model} onValueChange={setModel}>
@@ -106,6 +139,7 @@ export function CreateSessionDialog({
               </SelectContent>
             </Select>
           </div>
+          {/* Repo */}
           <div className="space-y-2">
             <Label>Repo</Label>
             <Select value={repoPath} onValueChange={setRepoPath}>

@@ -34,7 +34,7 @@ async def start_run(
     project_path: str,
     model: str,
     claude_session_id: str | None,
-    interactive: bool,
+    mode: str,
     timeout: int,
 ) -> asyncio.Queue:
     """Launch Claude as an independent background task. Returns a Queue the
@@ -52,7 +52,7 @@ async def start_run(
                 claude_session_id=claude_session_id,
                 timeout=timeout,
                 session_key=key,
-                interactive=interactive,
+                mode=mode,
             ):
                 try:
                     q.put_nowait(event)

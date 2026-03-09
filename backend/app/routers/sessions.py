@@ -17,6 +17,8 @@ from app.schemas.session import CreateSessionRequest
 
 router = APIRouter(tags=["sessions"])
 
+_STREAMING_MODES = {"planning", "analysis", "freeform"}
+
 
 # --- repos ---
 
@@ -62,10 +64,11 @@ async def create_session(
         name=name,
         project_path=body.project_path,
         model=body.model,
+        mode=body.mode,
     )
     db.add(session)
     db.commit()
-    return {"session_key": session_key, "name": name}
+    return {"session_key": session_key, "name": name, "mode": body.mode}
 
 
 @router.get("/sessions/events")
@@ -81,7 +84,7 @@ async def session_events(
             "name": s.name,
             "model": s.model,
             "project_path": s.project_path,
-            "interactive": s.interactive,
+            "mode": s.mode,
             "claude_session_id": s.claude_session_id,
         }
         for s in user_sessions
@@ -134,7 +137,7 @@ async def list_sessions(
             "status": "idle",
             "model": s.model,
             "project_path": s.project_path,
-            "interactive": s.interactive,
+            "mode": s.mode,
             "claude_session_id": s.claude_session_id,
         }
         for s in sessions
@@ -161,7 +164,7 @@ async def get_session(
         "status": "idle",
         "model": session.model,
         "project_path": session.project_path,
-        "interactive": session.interactive,
+        "mode": session.mode,
         "claude_session_id": session.claude_session_id,
         "created_at": session.created_at.isoformat(),
     }
@@ -199,7 +202,11 @@ async def send_message(
     db.add(SessionMessage(session_id=session.id, role="user", content=content))
     db.commit()
 
-    # Read uploaded files into memory for forwarding to slave
+    # Streaming modes return SSE
+    if session.mode in _STREAMING_MODES:
+        return _stream_response(session, content, db, user)
+
+    # Oneshot mode: blocking call
     file_tuples = None
     if files:
         file_tuples = []
@@ -213,7 +220,7 @@ async def send_message(
         project_path=session.project_path,
         model=session.model,
         claude_session_id=session.claude_session_id,
-        interactive=session.interactive,
+        mode=session.mode,
         files=file_tuples,
     )
 
@@ -234,6 +241,64 @@ async def send_message(
         "session_id": new_claude_sid,
         "cost_usd": result.get("cost_usd"),
     }
+
+
+def _stream_response(session: Session, content: str, db: DBSession, user: User) -> StreamingResponse:
+    """Return an SSE StreamingResponse that proxies the slave stream."""
+
+    async def generate():
+        full_text = ""
+        new_session_id = None
+        cost_usd = None
+
+        try:
+            async for event in slave.stream_run(
+                session_key=session.session_key,
+                message=content,
+                project_path=session.project_path,
+                model=session.model,
+                claude_session_id=session.claude_session_id,
+                mode=session.mode,
+            ):
+                evt = event.get("event", "message")
+
+                if evt == "token":
+                    token = event.get("token", "")
+                    full_text += token
+                    yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
+
+                elif evt == "tool_use":
+                    yield f"event: tool_use\ndata: {json.dumps({'tool': event.get('tool', ''), 'input': event.get('input', {})})}\n\n"
+
+                elif evt == "tool_result":
+                    yield f"event: tool_result\ndata: {json.dumps({'tool': event.get('tool', ''), 'output': event.get('output', '')})}\n\n"
+
+                elif evt == "done":
+                    full_text = event.get("result", full_text).strip()
+                    new_session_id = event.get("session_id")
+                    cost_usd = event.get("cost_usd")
+                    yield f"event: done\ndata: {json.dumps({'result': full_text, 'session_id': new_session_id, 'cost_usd': cost_usd})}\n\n"
+
+                elif evt == "error":
+                    full_text = event.get("error", "Error occurred")
+                    yield f"event: error\ndata: {json.dumps({'error': full_text})}\n\n"
+
+        except Exception as e:
+            full_text = full_text or f"Stream error: {e}"
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+        # Save the assistant message after stream completes
+        if full_text:
+            if new_session_id:
+                session.claude_session_id = new_session_id
+            db.add(SessionMessage(session_id=session.id, role="assistant", content=full_text))
+            db.commit()
+
+            if user.fcm_token and user.notify_sessions:
+                preview = full_text[:100] + ("..." if len(full_text) > 100 else "")
+                send_push(user.fcm_token, session.name or "Session reply", preview, {"session_key": session.session_key})
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.post("/sessions/{session_key}/cancel")

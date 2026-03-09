@@ -45,6 +45,11 @@ export function SessionCard({
         <Cpu className="h-2.5 w-2.5" />
         {session.model || "—"}
       </span>
+      {session.mode && session.mode !== "oneshot" && (
+        <span className="inline-flex items-center rounded-full bg-violet-500/15 px-1.5 py-0 text-[10px] font-medium text-violet-500 shrink-0">
+          {session.mode}
+        </span>
+      )}
       <span
         className={`inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-medium shrink-0 ${
           isBusy ? "bg-red-500/15 text-red-500" : "bg-green-500/15 text-green-500"

@@ -23,7 +23,7 @@ class RunRequest(BaseModel):
     project_path: str = "/projects"
     model: str = "claude-opus-4-6"
     claude_session_id: str | None = None
-    interactive: bool = False
+    mode: str = "oneshot"
     timeout: int = 300
 
 
@@ -67,7 +67,7 @@ async def run(req: RunRequest):
             claude_session_id=req.claude_session_id,
             timeout=req.timeout,
             session_key=req.session_key,
-            interactive=req.interactive,
+            mode=req.mode,
         )
     finally:
         await _set_status(req.session_key, "idle")
@@ -82,12 +82,11 @@ async def run_with_files(
     project_path: str = Form("/projects"),
     model: str = Form("claude-opus-4-6"),
     claude_session_id: str = Form(None),
-    interactive: str = Form("false"),
+    mode: str = Form("oneshot"),
     timeout: int = Form(300),
     files: list[UploadFile] = File(default=[]),
 ):
     """Blocking Claude run with file attachments."""
-    interactive = interactive.lower() in ("true", "1", "yes")
     if session_key in busy_keys():
         raise HTTPException(status_code=409, detail="Session is busy")
 
@@ -116,7 +115,7 @@ async def run_with_files(
             claude_session_id=claude_session_id,
             timeout=timeout,
             session_key=session_key,
-            interactive=interactive,
+            mode=mode,
         )
     finally:
         await _set_status(session_key, "idle")
@@ -139,7 +138,7 @@ async def run_stream(req: RunRequest):
     else:
         q = await start_run(
             req.session_key, req.message, req.project_path,
-            req.model, req.claude_session_id, req.interactive, req.timeout,
+            req.model, req.claude_session_id, req.mode, req.timeout,
         )
 
     async def generate():
