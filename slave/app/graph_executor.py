@@ -334,69 +334,122 @@ def _build_node_map(definition: dict) -> dict[str, dict]:
 
 
 def _get_next_node(node: dict, edge_map: dict[str, list[str]]) -> str | None:
-    """Get the next node for a non-condition node.
-
-    Uses the node's 'targets' field if present (from builder),
-    otherwise falls back to edge_map. Returns first target.
-    """
+    """Get the first next node (used for failed-retry and legacy fallback)."""
     targets = node.get("targets", [])
     if targets:
-        # Filter empty strings
         valid = [t for t in targets if t]
         if valid:
             return valid[0]
-
-    # Legacy: 'next' field
     if node.get("next"):
         return node["next"]
-
-    # Fallback to edge map
     edges = edge_map.get(node["id"], [])
     return edges[0] if edges else None
 
 
-async def execute_graph(
-    definition: dict,
+def _get_all_next_nodes(node: dict, edge_map: dict[str, list[str]]) -> list[str]:
+    """Get ALL next node IDs for a non-condition node.
+
+    Returns multiple targets when present (for parallel fork).
+    """
+    targets = node.get("targets", [])
+    if targets:
+        valid = [t for t in targets if t]
+        if valid:
+            return valid
+    if node.get("next"):
+        return [node["next"]]
+    return edge_map.get(node["id"], [])
+
+
+def _find_join_point(
+    fork_targets: list[str],
+    edge_map: dict[str, list[str]],
+) -> str | None:
+    """Find the nearest node reachable from ALL fork targets (convergence point).
+
+    Uses BFS from each target to build reachable sets, then returns the first
+    node in the intersection (excluding fork targets themselves).
+    Returns None if paths don't converge.
+    """
+    if len(fork_targets) < 2:
+        return None
+
+    def _bfs_order(start: str) -> list[str]:
+        order: list[str] = []
+        seen = {start}
+        queue = [start]
+        while queue:
+            nid = queue.pop(0)
+            order.append(nid)
+            for next_id in edge_map.get(nid, []):
+                if next_id not in seen:
+                    seen.add(next_id)
+                    queue.append(next_id)
+        return order
+
+    reachable = [set(_bfs_order(t)) for t in fork_targets]
+    common = reachable[0].copy()
+    for r in reachable[1:]:
+        common &= r
+    # Don't pick a fork target as the join point
+    common -= set(fork_targets)
+    if not common:
+        return None
+    # Nearest common node = first in BFS from first target
+    for nid in _bfs_order(fork_targets[0]):
+        if nid in common:
+            return nid
+    return None
+
+
+# ── Segment result codes ──────────────────────────────────────────────────
+
+_SEG_JOIN = "join"        # stopped at join point, ready to continue
+_SEG_END = "end"          # reached an end node (pipeline success)
+_SEG_FAILED = "failed"    # reached a failed/error node
+_SEG_ERROR = "error"      # internal error
+_SEG_NO_NEXT = "no_next"  # fell off the graph
+
+
+# ── Recursive segment executor ────────────────────────────────────────────
+
+
+async def _execute_segment(
+    start_id: str,
+    node_map: dict[str, dict],
+    edge_map: dict[str, list[str]],
     ctx: dict,
     callback,
-) -> None:
-    """Execute a pipeline template graph.
+    state: dict,
+    stop_before: str | None = None,
+) -> str:
+    """Execute a linear segment of the graph, forking for parallel paths.
+
+    When a non-condition node has multiple outgoing targets, all paths are
+    executed concurrently via asyncio.gather. The segment stops BEFORE the
+    join point node so the caller can continue from there after all paths
+    converge.
 
     Args:
-        definition: The JSON pipeline template definition.
-        ctx: Shared context dict (pipeline_key, repo_path, worktree_path, etc.).
-        callback: Async function(data: dict) to report status updates.
+        start_id: Node to begin execution at.
+        stop_before: If set, stop before executing this node (join point).
+
+    Returns:
+        A _SEG_* status code indicating how the segment ended.
     """
     key = ctx["pipeline_key"]
-    node_map = _build_node_map(definition)
-    edge_map = _build_edge_map(definition)
-
-    # Find start node
-    start_nodes = [n for n in definition.get("nodes", []) if n["type"] == "start"]
-    if not start_nodes:
-        logger.error("Pipeline %s: no start node found in template", key)
-        await callback({"pipeline_key": key, "status": "failed", "error": "No start node in template"})
-        return
-
-    current_id = start_nodes[0]["id"]
-    pipeline_start = time.monotonic()
-    total_nodes = len(node_map)
-    visited_count = 0
-    logger.info("Pipeline %s: starting graph execution (%d nodes)", key, total_nodes)
-
-    # Initial callback: pipeline is starting
-    await callback({
-        "pipeline_key": key,
-        "status": "starting",
-        "step_log": f"Pipeline starting ({total_nodes} nodes in template)",
-    })
+    current_id: str | None = start_id
 
     while current_id is not None:
+        # Stop before the join point — the parent continues from here
+        if current_id == stop_before:
+            return _SEG_JOIN
+
         node = node_map.get(current_id)
         if node is None:
             logger.error("Pipeline %s: node '%s' not found in template", key, current_id)
             await callback({"pipeline_key": key, "status": "failed", "error": f"Node '{current_id}' not found"})
-            return
+            return _SEG_ERROR
 
         node_type = node["type"]
         node_name = node.get("name", current_id)
@@ -405,9 +458,12 @@ async def execute_graph(
         if handler is None:
             logger.error("Pipeline %s: unknown node type '%s' for node '%s'", key, node_type, current_id)
             await callback({"pipeline_key": key, "status": "failed", "error": f"Unknown node type '{node_type}'"})
-            return
+            return _SEG_ERROR
 
-        visited_count += 1
+        state["visited_count"] += 1
+        visited_count = state["visited_count"]
+        total_nodes = state["total_nodes"]
+        pipeline_start = state["pipeline_start"]
 
         # ── End node (success) ─────────────────────────────────────────
         if node_type == "end":
@@ -425,7 +481,7 @@ async def execute_graph(
                 "step_log": f"Pipeline done: {node_name}" + (f" — {result_msg}" if result_msg else ""),
                 "step": _make_step(node, "completed", pipeline_start, output=result_msg or None),
             })
-            return
+            return _SEG_END
 
         # ── Failed node (terminal failure) ─────────────────────────────
         if node_type == "failed":
@@ -459,15 +515,13 @@ async def execute_graph(
                 "step_log": f"Pipeline failed: {node_name}" + (f" — {reason}" if reason else ""),
                 "step": fail_step,
             })
-            return
+            return _SEG_FAILED
 
         # ── Execute node ────────────────────────────────────────────────
         status_label = node.get("status_label")
-
         node_start = time.monotonic()
         started_at_iso = datetime.now(timezone.utc).isoformat()
 
-        # Always send a "entering node" callback
         await callback({
             "pipeline_key": key,
             "status": status_label or "running",
@@ -486,7 +540,6 @@ async def execute_graph(
         # ── Handle result based on node type ────────────────────────────
         if node_type == "template":
             if result is None:
-                # Nested template failed
                 tpl_error = ctx.get(f"_error_{current_id}", "Nested template failed")
                 logger.error("Pipeline %s: %s template failed: %s", key, current_id, tpl_error)
                 await callback({
@@ -496,9 +549,8 @@ async def execute_graph(
                     "cost_usd": ctx.get("cost_usd", 0),
                     "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error=tpl_error),
                 })
-                return
+                return _SEG_FAILED
 
-            # Template succeeded
             await callback({
                 "pipeline_key": key,
                 "status": status_label or "running",
@@ -507,11 +559,10 @@ async def execute_graph(
                 "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso),
                 **{k: ctx.get(k) for k in ["pr_url", "pr_number", "branch", "claude_session_id", "issue_title"] if ctx.get(k)},
             })
-            current_id = _get_next_node(node, edge_map)
+            next_ids = _get_all_next_nodes(node, edge_map)
 
         elif node_type == "claude_agent":
             if result is None:
-                # Agent failed
                 agent_error = ctx.get(f"_error_{current_id}", "Agent returned no result")
                 logger.error("Pipeline %s: %s agent failed: %s", key, current_id, agent_error)
                 await callback({
@@ -521,12 +572,10 @@ async def execute_graph(
                     "cost_usd": ctx.get("cost_usd", 0),
                     "step": _make_step(node, "failed", node_start, started_at_iso=started_at_iso, error=agent_error),
                 })
-                return
+                return _SEG_FAILED
 
-            # Store raw result in ctx under node_id
             ctx[f"_raw_{current_id}"] = result
 
-            # Extract outputs (new format: [{name, values}])
             outputs = node.get("outputs", [])
             if isinstance(outputs, list) and outputs:
                 extracted = extract_outputs_from_text(result, outputs)
@@ -537,7 +586,6 @@ async def execute_graph(
                     else:
                         logger.warning("Pipeline %s: %s failed to extract '%s'", key, current_id, field)
 
-            # Legacy extract rules
             extract_rules = node.get("extract", {})
             if extract_rules:
                 extracted = extract_outputs_legacy(result, extract_rules)
@@ -545,7 +593,6 @@ async def execute_graph(
                     if value is not None:
                         ctx[field] = value
 
-            # Build output summary for step log
             output_summary = None
             all_outputs = node.get("outputs", [])
             if isinstance(all_outputs, list) and all_outputs:
@@ -553,7 +600,6 @@ async def execute_graph(
                 if parts:
                     output_summary = ", ".join(parts)
 
-            # Report progress
             await callback({
                 "pipeline_key": key,
                 "status": status_label or "running",
@@ -562,12 +608,9 @@ async def execute_graph(
                 "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso, output=output_summary),
                 **{k: ctx.get(k) for k in ["pr_url", "pr_number", "branch", "claude_session_id", "issue_title"] if ctx.get(k)},
             })
-
-            # Follow to next node
-            current_id = _get_next_node(node, edge_map)
+            next_ids = _get_all_next_nodes(node, edge_map)
 
         elif node_type == "condition":
-            # result is the next node ID (or None)
             if result is None:
                 logger.error("Pipeline %s: condition '%s' resolved to no target", key, current_id)
                 await callback({
@@ -576,7 +619,7 @@ async def execute_graph(
                     "error": f"Condition '{node_name}' has no valid branch",
                     "cost_usd": ctx.get("cost_usd", 0),
                 })
-                return
+                return _SEG_FAILED
 
             field = node.get("condition_field", "")
             value = ctx.get(field)
@@ -587,6 +630,7 @@ async def execute_graph(
                 "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso, output=f"{field}={value} → {result}"),
             })
             current_id = result
+            continue  # Condition always follows exactly one branch
 
         elif node_type == "start":
             await callback({
@@ -594,17 +638,127 @@ async def execute_graph(
                 "status": status_label or "running",
                 "step": _make_step(node, "completed", node_start, started_at_iso=started_at_iso),
             })
-            current_id = _get_next_node(node, edge_map)
+            next_ids = _get_all_next_nodes(node, edge_map)
 
         else:
-            current_id = _get_next_node(node, edge_map)
+            next_ids = _get_all_next_nodes(node, edge_map)
 
-    # Fell off the graph (no more edges)
-    total_time = time.monotonic() - pipeline_start
-    logger.warning("Pipeline %s: graph ended without reaching an end node (%.1fs)", key, total_time)
+        # ── Follow to next node(s) ─────────────────────────────────────
+        if not next_ids:
+            return _SEG_NO_NEXT
+        elif len(next_ids) == 1:
+            current_id = next_ids[0]
+        else:
+            # ── Parallel fork ──────────────────────────────────────────
+            join_point = _find_join_point(next_ids, edge_map)
+            path_names = [node_map.get(nid, {}).get("name", nid) for nid in next_ids]
+            logger.info(
+                "Pipeline %s: %s forking to %d parallel paths [%s] (join: %s)",
+                key, current_id, len(next_ids),
+                ", ".join(str(n) for n in path_names),
+                join_point or "none",
+            )
+            await callback({
+                "pipeline_key": key,
+                "status": status_label or "running",
+                "step_log": f"Forking: {node_name} → {len(next_ids)} parallel paths",
+            })
+
+            tasks = [
+                _execute_segment(
+                    nid, node_map, edge_map, ctx, callback, state,
+                    stop_before=join_point,
+                )
+                for nid in next_ids
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Check for errors/failures in any path
+            for i, r in enumerate(results):
+                if isinstance(r, Exception):
+                    logger.error("Pipeline %s: parallel path %s crashed: %s", key, next_ids[i], r)
+                    await callback({
+                        "pipeline_key": key,
+                        "status": "failed",
+                        "error": f"Parallel path '{path_names[i]}' crashed: {r}",
+                        "cost_usd": ctx.get("cost_usd", 0),
+                    })
+                    return _SEG_ERROR
+                if r in (_SEG_FAILED, _SEG_ERROR):
+                    return r
+
+            logger.info(
+                "Pipeline %s: all %d parallel paths completed, joining at %s",
+                key, len(next_ids), join_point or "end",
+            )
+
+            if join_point:
+                join_name = node_map.get(join_point, {}).get("name", join_point)
+                await callback({
+                    "pipeline_key": key,
+                    "status": status_label or "running",
+                    "step_log": f"Parallel paths joined → continuing from {join_name}",
+                })
+                current_id = join_point
+            else:
+                # No convergence — check if any path ended successfully
+                if any(r == _SEG_END for r in results):
+                    return _SEG_END
+                return _SEG_NO_NEXT
+
+    return _SEG_NO_NEXT
+
+
+# ── Top-level graph executor ──────────────────────────────────────────────
+
+
+async def execute_graph(
+    definition: dict,
+    ctx: dict,
+    callback,
+) -> None:
+    """Execute a pipeline template graph.
+
+    Supports parallel execution: when a non-condition node has multiple
+    outgoing targets, all paths run concurrently via asyncio.gather.
+    Paths converge at the nearest common downstream node (join point).
+
+    Note: parallel paths share the same ctx dict. Use different output
+    variable names in parallel agent nodes to avoid overwrites.
+    """
+    key = ctx["pipeline_key"]
+    node_map = _build_node_map(definition)
+    edge_map = _build_edge_map(definition)
+
+    start_nodes = [n for n in definition.get("nodes", []) if n["type"] == "start"]
+    if not start_nodes:
+        logger.error("Pipeline %s: no start node found in template", key)
+        await callback({"pipeline_key": key, "status": "failed", "error": "No start node in template"})
+        return
+
+    state = {
+        "visited_count": 0,
+        "total_nodes": len(node_map),
+        "pipeline_start": time.monotonic(),
+    }
+
+    logger.info("Pipeline %s: starting graph execution (%d nodes)", key, state["total_nodes"])
     await callback({
         "pipeline_key": key,
-        "status": "failed",
-        "error": "Pipeline ended without reaching an end node",
-        "cost_usd": ctx.get("cost_usd", 0),
+        "status": "starting",
+        "step_log": f"Pipeline starting ({state['total_nodes']} nodes in template)",
     })
+
+    result = await _execute_segment(
+        start_nodes[0]["id"], node_map, edge_map, ctx, callback, state,
+    )
+
+    if result == _SEG_NO_NEXT:
+        total_time = time.monotonic() - state["pipeline_start"]
+        logger.warning("Pipeline %s: graph ended without reaching an end node (%.1fs)", key, total_time)
+        await callback({
+            "pipeline_key": key,
+            "status": "failed",
+            "error": "Pipeline ended without reaching an end node",
+            "cost_usd": ctx.get("cost_usd", 0),
+        })
