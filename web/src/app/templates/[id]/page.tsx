@@ -304,7 +304,6 @@ function BuilderContent() {
   const handleExportJson = useCallback(() => {
     if (!template) return;
     const definition = flowToDefinition(nodes, edges, {
-      version: template.definition.version,
       name: template.definition.name,
     });
     const json = JSON.stringify(definition, null, 2);
@@ -392,7 +391,6 @@ function BuilderContent() {
     setSaving(true);
     try {
       const definition = flowToDefinition(nodes, edges, {
-        version: template.definition.version,
         name: template.definition.name,
       });
       await updateTemplate(templateId, { definition });

@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 req_logger = logging.getLogger("doohub.requests")
 
 DEFAULT_TEMPLATE_DEFINITION = {
-    "version": 1,
     "name": "Default Plan-Develop-Review",
     "nodes": [
         {
