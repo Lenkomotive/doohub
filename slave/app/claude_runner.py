@@ -66,37 +66,45 @@ async def _git_pull(project_path: str) -> None:
         logger.warning("git pull error in %s: %s", project_path, e)
 
 
-_MODE_PROMPTS: dict[str, str] = {
-    "planning": (
-        "\n\n## Planning mode\n"
-        "You are in planning mode. Your job is to analyze, plan, and outline — NOT implement.\n"
-        "- Read and explore the codebase to understand the current state\n"
-        "- Provide a clear, structured plan with steps and trade-offs\n"
-        "- Do NOT write code, create files, or make changes\n"
-        "- Ask clarifying questions when the requirements are ambiguous\n"
-        "- Keep responses concise and well-structured\n"
-    ),
-    "analysis": (
-        "\n\n## Analysis mode\n"
-        "You are in read-only analysis mode. Explore and explain — do NOT modify anything.\n"
-        "- Read files, search code, and analyze the codebase\n"
-        "- Provide insights, explain patterns, identify issues\n"
-        "- Do NOT write, edit, or create any files\n"
-        "- Do NOT run commands that modify state (no git commits, no installs, etc.)\n"
-        "- Keep responses concise\n"
-    ),
-    "freeform": (
-        "\n\n## Interactive mode\n"
-        "You are in interactive mode. This is a conversational back-and-forth session.\n"
-        "- Keep responses concise — this is a live chat\n"
-        "- Before implementing anything, briefly explain your plan and ask for confirmation\n"
-        "- After making changes, summarize what you did\n"
-        "- Ask clarifying questions when needed\n"
-    ),
-}
+def _build_mode_prompt(mode: str, project_path: str) -> str | None:
+    repo_name = Path(project_path).name if project_path and project_path != "." else None
+    repo_line = f"You are working on the **{repo_name}** repository.\n" if repo_name else ""
+
+    prompts: dict[str, str] = {
+        "planning": (
+            "\n\n## You are a Software Architect\n"
+            f"{repo_line}"
+            "Your role is to analyze, plan, and design — NOT implement.\n"
+            "- Explore the codebase thoroughly to understand architecture and conventions\n"
+            "- Provide clear, structured plans with concrete steps and trade-offs\n"
+            "- Reference specific files and code when relevant\n"
+            "- Do NOT write code, create files, or make any changes\n"
+            "- Ask clarifying questions when requirements are ambiguous\n"
+        ),
+        "analysis": (
+            "\n\n## You are a Code Analyst\n"
+            f"{repo_line}"
+            "Your role is to explore, explain, and provide insights — strictly read-only.\n"
+            "- Read files, search code, and analyze patterns and architecture\n"
+            "- Identify issues, explain design decisions, surface technical debt\n"
+            "- Reference specific files and line numbers in your findings\n"
+            "- Do NOT write, edit, or create any files\n"
+            "- Do NOT run commands that modify state\n"
+        ),
+        "freeform": (
+            "\n\n## You are a Pair Programmer\n"
+            f"{repo_line}"
+            "This is a live interactive session — think of it as pair programming.\n"
+            "- Keep responses concise and conversational\n"
+            "- Before implementing, briefly explain your plan and ask for confirmation\n"
+            "- After making changes, summarize what you did\n"
+            "- Ask clarifying questions when needed\n"
+        ),
+    }
+    return prompts.get(mode)
 
 _MODE_ALLOWED_TOOLS: dict[str, list[str]] = {
-    "analysis": ["Read", "Glob", "Grep", "Bash(git status:*)", "Bash(git log:*)", "Bash(git diff:*)"],
+    "analysis": ["Read", "Glob", "Grep", "Bash(git:*)"],
 }
 
 
@@ -106,6 +114,7 @@ def _build_cmd(
     claude_session_id: str | None,
     output_format: str,
     mode: str = "oneshot",
+    project_path: str = ".",
 ) -> list[str]:
     cmd = [
         "claude",
@@ -122,7 +131,7 @@ def _build_cmd(
     else:
         cmd.append("--dangerously-skip-permissions")
 
-    system_prompt = _MODE_PROMPTS.get(mode)
+    system_prompt = _build_mode_prompt(mode, project_path)
     if system_prompt:
         cmd.extend(["--append-system-prompt", system_prompt])
 
@@ -149,7 +158,7 @@ async def run_prompt(
     mode: str = "oneshot",
 ) -> dict:
     """Blocking Claude run. Returns parsed result dict."""
-    cmd = _build_cmd(prompt, model, claude_session_id, "json", mode)
+    cmd = _build_cmd(prompt, model, claude_session_id, "json", mode, project_path)
     _sync_claude_md()
     _ensure_claude_config()
     await _git_pull(project_path)
@@ -211,7 +220,7 @@ async def stream_prompt(
     - {"event": "done",  "session_key": key, "result": "...", "session_id": "...", "cost_usd": ...}
     - {"event": "error", "session_key": key, "error": "..."}
     """
-    cmd = _build_cmd(prompt, model, claude_session_id, "stream-json", mode)
+    cmd = _build_cmd(prompt, model, claude_session_id, "stream-json", mode, project_path)
     _sync_claude_md()
     _ensure_claude_config()
     await _git_pull(project_path)
