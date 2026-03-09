@@ -1,5 +1,5 @@
 #!/bin/sh
-# Nightly Postgres backup — commits to Lenkomotive/doohub-backups repo.
+# Nightly Postgres backup — commits to dooslave/doohub-backups repo.
 
 set -eu
 
@@ -13,7 +13,7 @@ apk add --no-cache git postgresql16-client > /dev/null 2>&1 || true
 
 # Clone or update the backup repo.
 if [ ! -d "${REPO_DIR}/.git" ]; then
-  git clone "https://x-access-token:${GH_TOKEN}@github.com/Lenkomotive/doohub-backups.git" "${REPO_DIR}"
+  git clone "https://x-access-token:${GH_TOKEN}@github.com/dooslave/doohub-backups.git" "${REPO_DIR}"
 fi
 
 cd "${REPO_DIR}"
