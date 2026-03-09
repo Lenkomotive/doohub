@@ -31,6 +31,9 @@ class Pipeline(Base):
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("pipeline_templates.id"), nullable=True
     )
+    schedule_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pipeline_schedules.id", ondelete="SET NULL"), nullable=True
+    )
     template = relationship("PipelineTemplate", lazy="joined")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
