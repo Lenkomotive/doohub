@@ -7,7 +7,7 @@ ALLOWED_NODE_TYPES = {"start", "end", "failed", "claude_agent", "condition", "te
 
 
 def _validate_definition(definition: dict[str, Any]) -> dict[str, Any]:
-    required_keys = {"version", "name", "nodes", "edges"}
+    required_keys = {"name", "nodes", "edges"}
     missing = required_keys - definition.keys()
     if missing:
         raise ValueError(f"Definition missing required keys: {', '.join(sorted(missing))}")

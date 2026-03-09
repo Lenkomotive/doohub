@@ -47,13 +47,11 @@ class TemplateEdge {
 }
 
 class TemplateDefinition {
-  final int version;
   final String name;
   final List<TemplateNode> nodes;
   final List<TemplateEdge> edges;
 
   TemplateDefinition({
-    required this.version,
     required this.name,
     required this.nodes,
     required this.edges,
@@ -61,7 +59,6 @@ class TemplateDefinition {
 
   factory TemplateDefinition.fromJson(Map<String, dynamic> json) {
     return TemplateDefinition(
-      version: json['version'] as int? ?? 1,
       name: json['name'] as String? ?? '',
       nodes: (json['nodes'] as List?)
               ?.map((e) => TemplateNode.fromJson(e as Map<String, dynamic>))
@@ -98,7 +95,7 @@ class PipelineTemplate {
       name: json['name'],
       description: json['description'],
       definition: TemplateDefinition.fromJson(
-        json['definition'] as Map<String, dynamic>? ?? {'version': 1, 'name': '', 'nodes': [], 'edges': []},
+        json['definition'] as Map<String, dynamic>? ?? {'name': '', 'nodes': [], 'edges': []},
       ),
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),

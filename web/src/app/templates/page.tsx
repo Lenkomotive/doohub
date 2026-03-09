@@ -46,7 +46,6 @@ function TemplatesContent() {
       name: newName.trim(),
       description: newDescription.trim() || null,
       definition: {
-        version: 1,
         name: newName.trim(),
         nodes: [
           { id: "start", type: "start" },

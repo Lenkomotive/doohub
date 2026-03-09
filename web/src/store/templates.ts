@@ -6,7 +6,6 @@ export interface PipelineTemplate {
   name: string;
   description: string | null;
   definition: {
-    version: number;
     name: string;
     nodes: Array<{ id: string; type: string; [key: string]: unknown }>;
     edges: Array<{ from: string; to: string }>;

@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../models/pipeline_template.dart';
@@ -32,7 +34,8 @@ class TemplatesCubit extends Cubit<TemplatesState> {
       final data = await api.getTemplates();
       final templates = data.map((e) => PipelineTemplate.fromJson(e as Map<String, dynamic>)).toList();
       if (!isClosed) emit(state.copyWith(templates: templates, isLoading: false));
-    } catch (_) {
+    } catch (e, st) {
+      log('Failed to fetch templates: $e', stackTrace: st, name: 'TemplatesCubit');
       if (!isClosed) emit(state.copyWith(isLoading: false));
     }
   }

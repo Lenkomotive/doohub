@@ -70,10 +70,9 @@ export function definitionToFlow(definition: PipelineTemplate["definition"]): {
 export function flowToDefinition(
   nodes: Node[],
   edges: Edge[],
-  meta: { version: number; name: string },
+  meta: { name: string },
 ): PipelineTemplate["definition"] {
   return {
-    version: meta.version,
     name: meta.name,
     nodes: nodes.map((n) => ({
       ...n.data,
