@@ -112,6 +112,7 @@ def _build_cmd(
         "-p", prompt,
         "--output-format", output_format,
         "--model", model,
+        "--verbose",
     ]
 
     allowed_tools = _MODE_ALLOWED_TOOLS.get(mode)
