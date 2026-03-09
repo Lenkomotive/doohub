@@ -254,12 +254,6 @@ function PipelineDetail() {
                 </p>
               </div>
             )}
-            {pipeline.template_name && (
-              <div>
-                <span className="text-muted-foreground">Template</span>
-                <p className="font-medium">{pipeline.template_name}</p>
-              </div>
-            )}
             {pipeline.total_cost_usd > 0 && (
               <div>
                 <span className="text-muted-foreground">Cost</span>

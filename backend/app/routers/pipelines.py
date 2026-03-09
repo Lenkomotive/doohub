@@ -405,8 +405,6 @@ def _serialize(p: Pipeline) -> dict:
         "template_id": p.template_id,
         "template_name": p.template.name if p.template else None,
         "step_logs": p.step_logs or [],
-        "template_id": p.template_id,
-        "template_name": p.template.name if p.template else None,
         "total_steps": _count_work_nodes(p),
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
