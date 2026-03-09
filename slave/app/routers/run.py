@@ -171,3 +171,16 @@ async def generate_name():
     """Return a random first name from a pre-built global list."""
     from app.names import random_name
     return {"name": random_name()}
+
+
+@router.get("/roles")
+async def list_roles():
+    """Return available session roles/modes."""
+    from app.roles import get_roles
+    roles = get_roles()
+    return {
+        "roles": {
+            k: {"title": v["title"], "has_tool_restrictions": "allowed_tools" in v}
+            for k, v in roles.items()
+        }
+    }

@@ -47,7 +47,7 @@ export function SessionCard({
       </span>
       {session.mode && session.mode !== "oneshot" && (
         <span className="inline-flex items-center rounded-full bg-violet-500/15 px-1.5 py-0 text-[10px] font-medium text-violet-500 shrink-0">
-          {session.mode}
+          {session.mode.replace(/_/g, " ")}
         </span>
       )}
       <span

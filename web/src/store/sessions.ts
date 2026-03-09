@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
 import { connectSSE } from "@/lib/sse";
 
-export type SessionMode = "oneshot" | "planning" | "analysis" | "freeform";
+export type SessionMode = string;
 
 export interface Session {
   session_key: string;

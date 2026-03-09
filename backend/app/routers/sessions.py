@@ -17,7 +17,16 @@ from app.schemas.session import CreateSessionRequest
 
 router = APIRouter(tags=["sessions"])
 
-_STREAMING_MODES = {"planning", "analysis", "freeform"}
+# Oneshot is the only non-streaming mode
+_NON_STREAMING_MODES = {"oneshot"}
+
+
+# --- roles ---
+
+
+@router.get("/roles")
+async def list_roles(_user: User = Depends(get_current_user)):
+    return await slave.list_roles()
 
 
 # --- repos ---
@@ -202,8 +211,8 @@ async def send_message(
     db.add(SessionMessage(session_id=session.id, role="user", content=content))
     db.commit()
 
-    # Streaming modes return SSE
-    if session.mode in _STREAMING_MODES:
+    # Everything except oneshot uses streaming
+    if session.mode not in _NON_STREAMING_MODES:
         return _stream_response(session, content, db, user)
 
     # Oneshot mode: blocking call

@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from app.config import settings
+from app.roles import build_mode_prompt, get_allowed_tools
 
 logger = logging.getLogger(__name__)
 
@@ -66,48 +67,6 @@ async def _git_pull(project_path: str) -> None:
         logger.warning("git pull error in %s: %s", project_path, e)
 
 
-def _build_mode_prompt(mode: str, project_path: str) -> str | None:
-    repo_name = Path(project_path).name if project_path and project_path != "." else None
-    repo_line = f"You are working on the **{repo_name}** repository.\n" if repo_name else ""
-
-    prompts: dict[str, str] = {
-        "planning": (
-            "\n\n## You are a Software Architect\n"
-            f"{repo_line}"
-            "Your role is to analyze, plan, and design — NOT implement.\n"
-            "- Explore the codebase thoroughly to understand architecture and conventions\n"
-            "- Provide clear, structured plans with concrete steps and trade-offs\n"
-            "- Reference specific files and code when relevant\n"
-            "- Do NOT write code, create files, or make any changes\n"
-            "- Ask clarifying questions when requirements are ambiguous\n"
-        ),
-        "analysis": (
-            "\n\n## You are a Code Analyst\n"
-            f"{repo_line}"
-            "Your role is to explore, explain, and provide insights — strictly read-only.\n"
-            "- Read files, search code, and analyze patterns and architecture\n"
-            "- Identify issues, explain design decisions, surface technical debt\n"
-            "- Reference specific files and line numbers in your findings\n"
-            "- Do NOT write, edit, or create any files\n"
-            "- Do NOT run commands that modify state\n"
-        ),
-        "freeform": (
-            "\n\n## You are a Pair Programmer\n"
-            f"{repo_line}"
-            "This is a live interactive session — think of it as pair programming.\n"
-            "- Keep responses concise and conversational\n"
-            "- Before implementing, briefly explain your plan and ask for confirmation\n"
-            "- After making changes, summarize what you did\n"
-            "- Ask clarifying questions when needed\n"
-        ),
-    }
-    return prompts.get(mode)
-
-_MODE_ALLOWED_TOOLS: dict[str, list[str]] = {
-    "analysis": ["Read", "Glob", "Grep", "Bash(git:*)"],
-}
-
-
 def _build_cmd(
     prompt: str,
     model: str,
@@ -124,14 +83,14 @@ def _build_cmd(
         "--verbose",
     ]
 
-    allowed_tools = _MODE_ALLOWED_TOOLS.get(mode)
+    allowed_tools = get_allowed_tools(mode)
     if allowed_tools:
         cmd.append("--allowedTools")
         cmd.extend(allowed_tools)
     else:
         cmd.append("--dangerously-skip-permissions")
 
-    system_prompt = _build_mode_prompt(mode, project_path)
+    system_prompt = build_mode_prompt(mode, project_path)
     if system_prompt:
         cmd.extend(["--append-system-prompt", system_prompt])
 

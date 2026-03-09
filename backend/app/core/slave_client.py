@@ -235,6 +235,9 @@ class SlaveClient:
         except Exception:
             return "New Session"
 
+    async def list_roles(self) -> Any:
+        return await self._request("GET", "/api/roles")
+
     async def get_logs(self, limit: int = 100, level: str | None = None) -> Any:
         params: dict = {"limit": limit}
         if level:

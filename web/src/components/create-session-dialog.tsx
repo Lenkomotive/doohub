@@ -27,16 +27,22 @@ const models = [
   { value: "haiku", label: "Haiku" },
 ];
 
-const modes: { value: SessionMode; label: string; desc: string }[] = [
-  { value: "oneshot", label: "Oneshot", desc: "Fire & forget, full autonomy" },
-  { value: "freeform", label: "Freeform", desc: "Interactive back-and-forth" },
-  { value: "planning", label: "Planning", desc: "Analyze & plan, no writes" },
-  { value: "analysis", label: "Analysis", desc: "Read-only code exploration" },
+// Fallback modes shown while roles API loads
+const FALLBACK_MODES: { value: SessionMode; label: string }[] = [
+  { value: "oneshot", label: "Oneshot" },
+  { value: "freeform", label: "Freeform" },
+  { value: "planning", label: "Planning" },
+  { value: "analysis", label: "Analysis" },
 ];
 
 interface Repo {
   name: string;
   path: string;
+}
+
+interface RoleInfo {
+  title: string;
+  has_tool_restrictions: boolean;
 }
 
 export function CreateSessionDialog({
@@ -46,6 +52,7 @@ export function CreateSessionDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [repos, setRepos] = useState<Repo[]>([]);
+  const [modes, setModes] = useState(FALLBACK_MODES);
   const [model, setModel] = useState("opus");
   const [repoPath, setRepoPath] = useState("");
   const [mode, setMode] = useState<SessionMode>("oneshot");
@@ -58,6 +65,21 @@ export function CreateSessionDialog({
         if (res.ok) {
           const data = await res.json();
           setRepos(data.repos);
+        }
+      });
+      apiFetch("/roles").then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          const roleEntries = Object.entries(data.roles as Record<string, RoleInfo>);
+          // Always put oneshot first, then sort the rest alphabetically
+          const allModes = [
+            { value: "oneshot", label: "Oneshot" },
+            ...roleEntries.map(([key, info]) => ({
+              value: key,
+              label: info.title,
+            })),
+          ];
+          setModes(allModes);
         }
       });
     }
@@ -118,7 +140,6 @@ export function CreateSessionDialog({
                   }`}
                 >
                   <div className="font-medium">{m.label}</div>
-                  <div className="text-[11px] text-muted-foreground">{m.desc}</div>
                 </button>
               ))}
             </div>
