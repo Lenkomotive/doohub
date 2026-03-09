@@ -34,6 +34,7 @@ interface TemplatesState {
   createTemplate: (body: CreateTemplateBody) => Promise<PipelineTemplate | null>;
   updateTemplate: (id: number, body: UpdateTemplateBody) => Promise<PipelineTemplate | null>;
   deleteTemplate: (id: number) => Promise<boolean>;
+  duplicateTemplate: (id: number) => Promise<PipelineTemplate | null>;
 }
 
 export const useTemplatesStore = create<TemplatesState>((set, get) => ({
@@ -93,5 +94,25 @@ export const useTemplatesStore = create<TemplatesState>((set, get) => ({
       return true;
     }
     return false;
+  },
+
+  duplicateTemplate: async (id) => {
+    const source = get().templates.find((t) => t.id === id);
+    if (!source) return null;
+
+    const maxNameLen = 200;
+    const baseName = `Copy of ${source.name}`.slice(0, maxNameLen);
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const name =
+        attempt === 0 ? baseName : `${baseName} (${attempt + 1})`.slice(0, maxNameLen);
+      const result = await get().createTemplate({
+        name,
+        description: source.description,
+        definition: JSON.parse(JSON.stringify(source.definition)),
+      });
+      if (result) return result;
+    }
+    return null;
   },
 }));
