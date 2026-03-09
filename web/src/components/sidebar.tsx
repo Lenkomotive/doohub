@@ -10,6 +10,7 @@ import {
   Settings,
   GitBranch,
   Workflow,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -20,6 +21,7 @@ const navItems = [
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
   { href: "/repos", label: "Repos", icon: FolderGit2 },
   { href: "/templates", label: "Templates", icon: Workflow },
+  { href: "/schedules", label: "Schedules", icon: Clock },
 ];
 
 export function Sidebar() {
