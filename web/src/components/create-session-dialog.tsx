@@ -26,6 +26,14 @@ const models = [
   { value: "haiku", label: "Haiku" },
 ];
 
+const modes = [
+  { value: "chat", label: "Chat" },
+  { value: "planning", label: "Planning" },
+  { value: "interactive", label: "Interactive" },
+  { value: "workflow", label: "Workflow" },
+  { value: "issue_creation", label: "Issue Creation" },
+];
+
 interface Repo {
   name: string;
   path: string;
@@ -39,6 +47,7 @@ export function CreateSessionDialog({
   const [open, setOpen] = useState(false);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [model, setModel] = useState("opus");
+  const [mode, setMode] = useState("chat");
   const [repoPath, setRepoPath] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -62,6 +71,7 @@ export function CreateSessionDialog({
       method: "POST",
       body: JSON.stringify({
         model,
+        mode,
         ...(repoPath && repoPath !== "general" ? { project_path: repoPath } : {}),
       }),
     });
@@ -70,6 +80,7 @@ export function CreateSessionDialog({
       const session = await res.json();
       setOpen(false);
       setModel("opus");
+      setMode("chat");
       setRepoPath("");
       onCreated(session.session_key);
     } else {
@@ -99,6 +110,21 @@ export function CreateSessionDialog({
               </SelectTrigger>
               <SelectContent>
                 {models.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Mode</Label>
+            <Select value={mode} onValueChange={setMode}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {modes.map((m) => (
                   <SelectItem key={m.value} value={m.value}>
                     {m.label}
                   </SelectItem>

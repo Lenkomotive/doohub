@@ -93,7 +93,7 @@ class SlaveClient:
         project_path: str,
         model: str,
         claude_session_id: str | None,
-        interactive: bool = False,
+        mode: str = "chat",
         timeout: int = 300,
         files: list[tuple[str, bytes, str]] | None = None,
     ) -> Any:
@@ -106,7 +106,7 @@ class SlaveClient:
                 "message": message,
                 "project_path": project_path,
                 "model": model,
-                "interactive": str(interactive).lower(),
+                "mode": mode,
                 "timeout": str(timeout),
             }
             if claude_session_id:
@@ -123,7 +123,7 @@ class SlaveClient:
             "project_path": project_path,
             "model": model,
             "claude_session_id": claude_session_id,
-            "interactive": interactive,
+            "mode": mode,
             "timeout": timeout,
         })
 

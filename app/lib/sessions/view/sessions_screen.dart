@@ -6,6 +6,14 @@ import '../../services/api.dart';
 import '../bloc/sessions_cubit.dart';
 import '../bloc/sessions_state.dart';
 
+String _modeLabel(String mode) => switch (mode) {
+  'planning' => 'Planning',
+  'interactive' => 'Interactive',
+  'workflow' => 'Workflow',
+  'issue_creation' => 'Issue Creation',
+  _ => 'Chat',
+};
+
 class SessionsScreen extends StatelessWidget {
   const SessionsScreen({super.key});
 
@@ -122,6 +130,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   List<String> _repos = [];
   String _selectedProject = '';
   String _selectedModel = 'opus';
+  String _selectedMode = 'chat';
   bool _loading = false;
   bool _loadingRepos = true;
 
@@ -144,7 +153,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   Future<void> _submit() async {
     setState(() => _loading = true);
     try {
-      final key = await widget.cubit.createSession(projectPath: _selectedProject, model: _selectedModel);
+      final key = await widget.cubit.createSession(projectPath: _selectedProject, model: _selectedModel, mode: _selectedMode);
       if (mounted) {
         Navigator.of(context).pop();
         widget.onCreated(key);
@@ -178,6 +187,19 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
               DropdownMenuItem(value: 'haiku', child: Text('Haiku')),
             ],
             onChanged: (v) => setState(() => _selectedModel = v ?? 'sonnet'),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _selectedMode,
+            decoration: const InputDecoration(labelText: 'Mode', border: OutlineInputBorder()),
+            items: const [
+              DropdownMenuItem(value: 'chat', child: Text('Chat')),
+              DropdownMenuItem(value: 'planning', child: Text('Planning')),
+              DropdownMenuItem(value: 'interactive', child: Text('Interactive')),
+              DropdownMenuItem(value: 'workflow', child: Text('Workflow')),
+              DropdownMenuItem(value: 'issue_creation', child: Text('Issue Creation')),
+            ],
+            onChanged: (v) => setState(() => _selectedMode = v ?? 'chat'),
           ),
           const SizedBox(height: 12),
           if (_loadingRepos)
@@ -249,6 +271,16 @@ class _SessionTile extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       session.projectPath.split('/').last,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.category_outlined, size: 12, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(
+                      _modeLabel(session.mode),
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],

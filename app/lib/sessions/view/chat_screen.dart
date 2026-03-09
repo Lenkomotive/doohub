@@ -130,9 +130,29 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ],
                 ),
-                Text(
-                  '${session.model} · ${session.projectPath.split('/').last}',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                Row(
+                  children: [
+                    Text(
+                      '${session.model} · ${session.projectPath.split('/').last}',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _modeLabelFor(session.mode),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -381,6 +401,14 @@ String _truncate(String text, int maxLen) {
   if (text.length <= maxLen) return text;
   return '${text.substring(0, maxLen)}...';
 }
+
+String _modeLabelFor(String mode) => switch (mode) {
+  'planning' => 'Planning',
+  'interactive' => 'Interactive',
+  'workflow' => 'Workflow',
+  'issue_creation' => 'Issue Creation',
+  _ => 'Chat',
+};
 
 final _urlRegex = RegExp(r'https?://[^\s]+|www\.[^\s]+', caseSensitive: false);
 

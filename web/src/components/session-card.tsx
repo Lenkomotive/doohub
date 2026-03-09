@@ -15,6 +15,13 @@ export function SessionCard({
 }) {
   const isBusy = session.status === "busy";
   const projectName = session.project_path?.split("/").pop() || "—";
+  const modeLabel: Record<string, string> = {
+    chat: "Chat",
+    planning: "Planning",
+    interactive: "Interactive",
+    workflow: "Workflow",
+    issue_creation: "Issue Creation",
+  };
 
   return (
     <div
@@ -40,6 +47,9 @@ export function SessionCard({
       <span className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
         <FolderGit2 className="h-2.5 w-2.5" />
         {projectName}
+      </span>
+      <span className="inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-medium shrink-0 bg-secondary text-secondary-foreground">
+        {modeLabel[session.mode] || session.mode}
       </span>
       <span className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
         <Cpu className="h-2.5 w-2.5" />

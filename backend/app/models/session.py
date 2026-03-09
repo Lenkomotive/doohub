@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -15,7 +15,7 @@ class Session(Base):
     name: Mapped[str] = mapped_column(String(200), default="untitled")
     project_path: Mapped[str] = mapped_column(String(500), default="")
     model: Mapped[str] = mapped_column(String(50), default="claude-opus-4-6")
-    interactive: Mapped[bool] = mapped_column(Boolean, default=False)
+    mode: Mapped[str] = mapped_column(String(30), default="chat")
     claude_session_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

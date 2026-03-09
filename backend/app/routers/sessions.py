@@ -13,7 +13,7 @@ from app.core.session_events import session_events as session_event_bus
 from app.core.slave_client import slave
 from app.models.session import Session, SessionMessage
 from app.models.user import User
-from app.schemas.session import CreateSessionRequest
+from app.schemas.session import CreateSessionRequest, VALID_MODES
 
 router = APIRouter(tags=["sessions"])
 
@@ -54,6 +54,8 @@ async def create_session(
     db: DBSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if body.mode not in VALID_MODES:
+        raise HTTPException(status_code=422, detail=f"Invalid mode: {body.mode}")
     session_key = uuid4().hex[:12]
     name = body.name or await slave.generate_name()
     session = Session(
@@ -62,6 +64,7 @@ async def create_session(
         name=name,
         project_path=body.project_path,
         model=body.model,
+        mode=body.mode,
     )
     db.add(session)
     db.commit()
@@ -81,7 +84,7 @@ async def session_events(
             "name": s.name,
             "model": s.model,
             "project_path": s.project_path,
-            "interactive": s.interactive,
+            "mode": s.mode,
             "claude_session_id": s.claude_session_id,
         }
         for s in user_sessions
@@ -134,7 +137,7 @@ async def list_sessions(
             "status": "idle",
             "model": s.model,
             "project_path": s.project_path,
-            "interactive": s.interactive,
+            "mode": s.mode,
             "claude_session_id": s.claude_session_id,
         }
         for s in sessions
@@ -161,7 +164,7 @@ async def get_session(
         "status": "idle",
         "model": session.model,
         "project_path": session.project_path,
-        "interactive": session.interactive,
+        "mode": session.mode,
         "claude_session_id": session.claude_session_id,
         "created_at": session.created_at.isoformat(),
     }
@@ -180,6 +183,33 @@ async def delete_session(
         raise HTTPException(status_code=404, detail="Session not found")
     db.delete(session)
     db.commit()
+
+
+@router.patch("/sessions/{session_key}")
+async def update_session(
+    session_key: str,
+    body: dict,
+    db: DBSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session = db.query(Session).filter(
+        Session.session_key == session_key, Session.user_id == user.id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    new_mode = body.get("mode")
+    if new_mode:
+        if new_mode not in VALID_MODES:
+            raise HTTPException(status_code=422, detail=f"Invalid mode: {new_mode}")
+        session.mode = new_mode
+        db.commit()
+
+    return {
+        "session_key": session.session_key,
+        "name": session.name,
+        "mode": session.mode,
+    }
 
 
 @router.post("/sessions/{session_key}/messages")
@@ -213,7 +243,7 @@ async def send_message(
         project_path=session.project_path,
         model=session.model,
         claude_session_id=session.claude_session_id,
-        interactive=session.interactive,
+        mode=session.mode,
         files=file_tuples,
     )
 

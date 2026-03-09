@@ -42,8 +42,19 @@ interface SessionInfo {
   status: string;
   model: string;
   project_path: string;
+  mode: string;
   claude_session_id: string | null;
 }
+
+const modeLabels: Record<string, string> = {
+  chat: "Chat",
+  planning: "Planning",
+  interactive: "Interactive",
+  workflow: "Workflow",
+  issue_creation: "Issue Creation",
+};
+
+const allModes = ["chat", "planning", "interactive", "workflow", "issue_creation"];
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -61,6 +72,7 @@ function ChatView() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [switchingMode, setSwitchingMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -142,6 +154,20 @@ function ChatView() {
     }
   };
 
+  const handleModeSwitch = async (newMode: string) => {
+    if (!session || newMode === session.mode) return;
+    setSwitchingMode(true);
+    const res = await apiFetch(`/sessions/${sessionKey}`, {
+      method: "PATCH",
+      body: JSON.stringify({ mode: newMode }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setSession((prev) => prev ? { ...prev, mode: data.mode } : prev);
+    }
+    setSwitchingMode(false);
+  };
+
   const handleCancel = async () => {
     await apiFetch(`/sessions/${sessionKey}/cancel`, { method: "POST" });
     await fetchSession();
@@ -195,6 +221,9 @@ function ChatView() {
               >
                 {session.status}
               </span>
+              <span className="inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-medium bg-secondary text-secondary-foreground">
+                {modeLabels[session.mode] || session.mode}
+              </span>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1">
@@ -209,6 +238,18 @@ function ChatView() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {session.status !== "busy" && (
+            <select
+              className="h-8 rounded-md border border-border/50 bg-background px-2 text-xs"
+              value={session.mode}
+              onChange={(e) => handleModeSwitch(e.target.value)}
+              disabled={switchingMode}
+            >
+              {allModes.map((m) => (
+                <option key={m} value={m}>{modeLabels[m]}</option>
+              ))}
+            </select>
+          )}
           {session.status === "busy" && (
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCancel}>
               <XCircle className="h-4 w-4" />

@@ -8,6 +8,7 @@ export interface Session {
   status: "idle" | "busy";
   model: string;
   project_path: string;
+  mode: string;
   claude_session_id: string | null;
 }
 
