@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2, Bot } from "lucide-react";
+import { Trash2, Bot, Copy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { PipelineTemplate } from "@/store/templates";
@@ -16,10 +16,12 @@ export function TemplateCard({
   template,
   onClick,
   onDelete,
+  onDuplicate,
 }: {
   template: PipelineTemplate;
   onClick?: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
 }) {
   const nodeCount = template.definition?.nodes?.length ?? 0;
   const agentCount = template.definition?.nodes?.filter(
@@ -45,6 +47,14 @@ export function TemplateCard({
       </span>
       <Badge variant="outline" className="text-[10px] h-5 shrink-0">{nodeCount} nodes</Badge>
       <span className="text-[11px] text-muted-foreground shrink-0">{formatDate(template.updated_at)}</span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0"
+        onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+      >
+        <Copy className="h-3 w-3" />
+      </Button>
       <Button
         variant="ghost"
         size="icon"

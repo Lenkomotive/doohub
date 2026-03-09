@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 
 function TemplatesContent() {
   const router = useRouter();
-  const { templates, isLoading, fetchTemplates, deleteTemplate, createTemplate } =
+  const { templates, isLoading, fetchTemplates, deleteTemplate, createTemplate, duplicateTemplate } =
     useTemplatesStore();
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -94,6 +94,7 @@ function TemplatesContent() {
               key={template.id}
               template={template}
               onClick={() => router.push(`/templates/${template.id}`)}
+              onDuplicate={() => duplicateTemplate(template.id)}
               onDelete={() => setDeleteId(template.id)}
             />
           ))}
