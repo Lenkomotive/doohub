@@ -21,4 +21,4 @@ jobs:
             cd ~/doohub
             git pull origin main
             docker compose -f docker-compose.prod.yml build slave
-            docker compose -f docker-compose.prod.yml up -d slave
+            docker compose -f docker-compose.prod.yml up -d --force-recreate slave
