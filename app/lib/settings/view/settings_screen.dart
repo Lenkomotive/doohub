@@ -6,7 +6,6 @@ import '../../services/api.dart';
 import '../../theme/bloc/theme_cubit.dart';
 import '../bloc/notification_settings_cubit.dart';
 import '../bloc/notification_settings_state.dart';
-
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 

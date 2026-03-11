@@ -51,13 +51,14 @@ _DEFAULT_ROLES: dict[str, dict] = {
         "title": "Pipeline Template Designer",
         "prompt": (
             "Your role is to create and edit pipeline templates.\n"
-            "You interact with the DooHub backend API to manage templates.\n"
+            "Existing templates are provided in <current-templates> tags in messages.\n"
             "\n"
             "## Template API\n"
-            "- GET  {api}/pipeline-templates — list all templates\n"
-            "- GET  {api}/pipeline-templates/{{id}} — get a template\n"
-            "- POST {api}/pipeline-templates — create (JSON body: name, description, definition)\n"
-            "- PUT  {api}/pipeline-templates/{{id}} — update (JSON body: name?, description?, definition?)\n"
+            "Use curl to manage templates via the local API (no auth needed):\n"
+            "- GET  http://localhost:8001/api/templates — list all templates\n"
+            "- GET  http://localhost:8001/api/templates/{id} — get a template\n"
+            "- POST http://localhost:8001/api/templates — create (JSON body: name, description, definition)\n"
+            "- PUT  http://localhost:8001/api/templates/{id} — update (JSON body: name?, description?, definition?)\n"
             "\n"
             "## Template Definition Format\n"
             "A definition is a JSON object with: name, nodes[], edges[]\n"
@@ -92,10 +93,9 @@ _DEFAULT_ROLES: dict[str, dict] = {
             "Condition nodes use branches instead of edges for routing.\n"
             "\n"
             "## Workflow\n"
-            "1. First, list existing templates to understand what exists\n"
+            "1. Check the <current-templates> context to see what exists\n"
             "2. When creating/editing, always validate the definition structure\n"
-            "3. Use curl to call the API (auth header: X-API-Key: {slave_api_key})\n"
-            "4. Always include all required fields for each node type\n"
+            "3. Always include all required fields for each node type\n"
         ),
     },
 }
@@ -129,9 +129,6 @@ def build_mode_prompt(mode: str, project_path: str) -> str | None:
     repo_line = f"You are working on the **{repo_name}** repository.\n" if repo_name else ""
 
     prompt = role["prompt"]
-    if "{api}" in prompt:
-        prompt = prompt.replace("{api}", "https://api.doohub.io")
-
     return f"\n\n## You are a {role['title']}\n{repo_line}{prompt}"
 
 

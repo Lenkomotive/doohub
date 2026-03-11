@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.fcm import send_push
 from app.core.session_events import session_events as session_event_bus
 from app.core.slave_client import slave
+from app.models.pipeline_template import PipelineTemplate
 from app.models.session import Session, SessionMessage
 from app.models.user import User
 from app.schemas.session import CreateSessionRequest
@@ -19,6 +20,23 @@ router = APIRouter(tags=["sessions"])
 
 # Oneshot is the only non-streaming mode
 _NON_STREAMING_MODES = {"oneshot"}
+
+
+def _template_context(db: DBSession) -> str:
+    """Build a lightweight template summary for injection into template_designer messages."""
+    templates = db.query(PipelineTemplate).order_by(PipelineTemplate.created_at.desc()).all()
+    if not templates:
+        return "<current-templates>\nNo templates exist yet.\n</current-templates>\n\n"
+    summary = json.dumps(
+        [{"id": t.id, "name": t.name, "description": t.description} for t in templates],
+        indent=2,
+    )
+    return (
+        "<current-templates>\n"
+        f"{summary}\n"
+        "Use GET http://localhost:8001/api/templates/{{id}} to fetch full definitions.\n"
+        "</current-templates>\n\n"
+    )
 
 
 # --- roles ---
@@ -211,9 +229,14 @@ async def send_message(
     db.add(SessionMessage(session_id=session.id, role="user", content=content))
     db.commit()
 
+    # Enrich message with template context for template_designer mode
+    slave_message = content
+    if session.mode == "template_designer":
+        slave_message = _template_context(db) + content
+
     # Everything except oneshot uses streaming
     if session.mode not in _NON_STREAMING_MODES:
-        return _stream_response(session, content, db, user)
+        return _stream_response(session, slave_message, db, user)
 
     # Oneshot mode: blocking call
     file_tuples = None
@@ -225,7 +248,7 @@ async def send_message(
 
     result = await slave.run(
         session_key=session_key,
-        message=content,
+        message=slave_message,
         project_path=session.project_path,
         model=session.model,
         claude_session_id=session.claude_session_id,

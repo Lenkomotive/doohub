@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session as DBSession
 
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user, require_slave_api_key
 from app.core.database import get_db
 from app.models.pipeline import Pipeline
 from app.models.pipeline_template import PipelineTemplate
@@ -144,3 +144,89 @@ def delete_template(
     db.delete(template)
     db.commit()
     logger.info("Deleted pipeline template '%s' (id=%d)", template.name, template.id)
+
+
+# --- internal endpoints (slave -> backend) ---
+
+
+@router.get("/internal/pipeline-templates")
+def internal_list_templates(
+    db: DBSession = Depends(get_db),
+    _auth: None = Depends(require_slave_api_key),
+):
+    templates = db.query(PipelineTemplate).order_by(PipelineTemplate.created_at.desc()).all()
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "description": t.description,
+            "definition": t.definition,
+            "created_at": t.created_at.isoformat(),
+            "updated_at": t.updated_at.isoformat(),
+        }
+        for t in templates
+    ]
+
+
+@router.get("/internal/pipeline-templates/{template_id}")
+def internal_get_template(
+    template_id: int,
+    db: DBSession = Depends(get_db),
+    _auth: None = Depends(require_slave_api_key),
+):
+    template = db.query(PipelineTemplate).filter(PipelineTemplate.id == template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {
+        "id": template.id,
+        "name": template.name,
+        "description": template.description,
+        "definition": template.definition,
+        "created_at": template.created_at.isoformat(),
+        "updated_at": template.updated_at.isoformat(),
+    }
+
+
+@router.post("/internal/pipeline-templates", status_code=201)
+def internal_create_template(
+    body: PipelineTemplateCreate,
+    db: DBSession = Depends(get_db),
+    _auth: None = Depends(require_slave_api_key),
+):
+    existing = db.query(PipelineTemplate).filter(PipelineTemplate.name == body.name).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Template with this name already exists")
+    template = PipelineTemplate(name=body.name, description=body.description, definition=body.definition)
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    logger.info("Internal: created template '%s' (id=%d)", template.name, template.id)
+    return {"id": template.id, "name": template.name}
+
+
+@router.put("/internal/pipeline-templates/{template_id}")
+def internal_update_template(
+    template_id: int,
+    body: PipelineTemplateUpdate,
+    db: DBSession = Depends(get_db),
+    _auth: None = Depends(require_slave_api_key),
+):
+    template = db.query(PipelineTemplate).filter(PipelineTemplate.id == template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    if body.name is not None:
+        dup = db.query(PipelineTemplate).filter(
+            PipelineTemplate.name == body.name, PipelineTemplate.id != template_id
+        ).first()
+        if dup:
+            raise HTTPException(status_code=409, detail="Template with this name already exists")
+        template.name = body.name
+    if body.description is not None:
+        template.description = body.description
+    if body.definition is not None:
+        _check_circular_refs(db, body.definition, template_id)
+        template.definition = body.definition
+    db.commit()
+    db.refresh(template)
+    logger.info("Internal: updated template '%s' (id=%d)", template.name, template.id)
+    return {"id": template.id, "name": template.name}

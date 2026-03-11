@@ -120,15 +120,19 @@ class _CreateSessionSheet extends StatefulWidget {
 
 class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   List<String> _repos = [];
+  Map<String, String> _roles = {}; // mode key -> display title
   String _selectedProject = '';
   String _selectedModel = 'opus';
+  String _selectedMode = 'oneshot';
   bool _loading = false;
   bool _loadingRepos = true;
+  bool _loadingRoles = true;
 
   @override
   void initState() {
     super.initState();
     _loadRepos();
+    _loadRoles();
   }
 
   Future<void> _loadRepos() async {
@@ -141,10 +145,38 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
     }
   }
 
+  Future<void> _loadRoles() async {
+    try {
+      final data = await widget.api.getRoles();
+      final rolesData = data['roles'] as Map<String, dynamic>;
+      final roles = <String, String>{};
+      rolesData.forEach((key, value) {
+        final title = (value as Map<String, dynamic>)['title'] as String? ?? key;
+        roles[key] = title;
+      });
+      setState(() {
+        _roles = roles;
+        if (!roles.containsKey(_selectedMode)) {
+          _selectedMode = roles.keys.first;
+        }
+        _loadingRoles = false;
+      });
+    } catch (_) {
+      setState(() {
+        _roles = {'oneshot': 'Oneshot', 'freeform': 'Freeform', 'planning': 'Planning', 'analysis': 'Analysis'};
+        _loadingRoles = false;
+      });
+    }
+  }
+
   Future<void> _submit() async {
     setState(() => _loading = true);
     try {
-      final key = await widget.cubit.createSession(projectPath: _selectedProject, model: _selectedModel);
+      final key = await widget.cubit.createSession(
+        projectPath: _selectedProject,
+        model: _selectedModel,
+        mode: _selectedMode,
+      );
       if (mounted) {
         Navigator.of(context).pop();
         widget.onCreated(key);
@@ -179,6 +211,18 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
             ],
             onChanged: (v) => setState(() => _selectedModel = v ?? 'sonnet'),
           ),
+          const SizedBox(height: 12),
+          if (_loadingRoles)
+            const Center(child: CircularProgressIndicator())
+          else
+            DropdownButtonFormField<String>(
+              initialValue: _selectedMode,
+              decoration: const InputDecoration(labelText: 'Mode', border: OutlineInputBorder()),
+              items: _roles.entries
+                  .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedMode = v ?? 'oneshot'),
+            ),
           const SizedBox(height: 12),
           if (_loadingRepos)
             const Center(child: CircularProgressIndicator())

@@ -137,10 +137,12 @@ class SessionsCubit extends Cubit<SessionsState> {
   Future<String> createSession({
     required String projectPath,
     String model = 'opus',
+    String mode = 'oneshot',
   }) async {
     final data = await api.createSession(
       projectPath: projectPath,
       model: model,
+      mode: mode,
     );
     await fetchSessions();
     return data['session_key'] as String;
@@ -228,10 +230,8 @@ class SessionsCubit extends Cubit<SessionsState> {
 
     addMessage(sessionKey, userMsg);
     setSending(sessionKey, true);
-    // Clear pending attachments
     _updateSession(sessionKey, (s) => s.copyWith(pendingAttachments: []));
 
-    // Collect files from attachments
     final files = attachments
         .where((a) => a.localPath != null)
         .map((a) => File(a.localPath!))

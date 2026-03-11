@@ -6,7 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.log_buffer import log_buffer
-from app.routers import orchestrate, repos, run
+from app.routers import orchestrate, repos, run, templates
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -40,6 +40,7 @@ app.add_middleware(RequestLoggingMiddleware)
 app.include_router(run.router)
 app.include_router(repos.router)
 app.include_router(orchestrate.router)
+app.include_router(templates.router)
 
 
 @app.get("/api/health")

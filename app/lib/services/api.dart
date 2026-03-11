@@ -135,12 +135,19 @@ class ApiService {
     await _dio.post('/sessions/$key/cancel');
   }
 
+  Future<Map<String, dynamic>> getRoles() async {
+    final res = await _dio.get('/roles');
+    return res.data;
+  }
+
   Future<Map<String, dynamic>> createSession({
     String model = 'opus',
+    String mode = 'oneshot',
     required String projectPath,
   }) async {
     final res = await _dio.post('/sessions', data: {
       'model': model,
+      'mode': mode,
       'project_path': projectPath,
     });
     return res.data;
