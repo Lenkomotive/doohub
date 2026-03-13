@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from app.config import settings
-from app.roles import build_mode_prompt, get_allowed_tools
+from app.roles import build_mode_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -79,15 +79,8 @@ def _build_cmd(
         "-p", prompt,
         "--output-format", "json",
         "--model", model,
-        "--verbose",
+        "--dangerously-skip-permissions",
     ]
-
-    allowed_tools = get_allowed_tools(mode)
-    if allowed_tools:
-        cmd.append("--allowedTools")
-        cmd.extend(allowed_tools)
-    else:
-        cmd.append("--dangerously-skip-permissions")
 
     system_prompt = build_mode_prompt(mode, project_path)
     if system_prompt:
