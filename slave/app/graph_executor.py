@@ -47,6 +47,8 @@ def extract_outputs_from_text(text: str, outputs: list[dict]) -> dict[str, str |
     upper_text = text.upper()
 
     for output in outputs:
+        if isinstance(output, str):
+            output = {"name": output, "values": []}
         name = output.get("name", "")
         if not name:
             continue
