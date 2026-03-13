@@ -131,25 +131,31 @@ export function CreatePipelineDialog() {
       setError("Repo is required");
       return;
     }
-    if (selectedIssues.length === 0) {
-      setError("Select at least one issue");
-      return;
-    }
 
     setLoading(true);
 
     try {
       const useTemplate = templateId && templateId !== "__none__";
-      for (const issueNum of selectedIssues) {
-        const issue = issues.find((i) => i.number === issueNum);
+      if (selectedIssues.length === 0) {
+        // Repo-only pipeline (no issue)
         await createPipeline({
           repo_path: repoPath,
-          issue_number: issueNum,
-          task_description: issue?.title || undefined,
           ...(useTemplate
             ? { template_id: Number(templateId) }
             : { model }),
         });
+      } else {
+        for (const issueNum of selectedIssues) {
+          const issue = issues.find((i) => i.number === issueNum);
+          await createPipeline({
+            repo_path: repoPath,
+            issue_number: issueNum,
+            task_description: issue?.title || undefined,
+            ...(useTemplate
+              ? { template_id: Number(templateId) }
+              : { model }),
+          });
+        }
       }
       setOpen(false);
     } catch (e) {
@@ -223,7 +229,7 @@ export function CreatePipelineDialog() {
           )}
           {repoPath && (
             <div className="space-y-2">
-              <Label>Issues</Label>
+              <Label>Issues <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <div ref={listRef} onScroll={handleScroll} className="max-h-72 overflow-y-auto overflow-x-hidden rounded-lg border border-border/50" style={{ scrollbarWidth: "none" }}>
                 {issues.length === 0 ? (
                   <p className="px-3 py-4 text-center text-sm text-muted-foreground">No open issues</p>
@@ -260,6 +266,9 @@ export function CreatePipelineDialog() {
           <Button onClick={handleCreate} disabled={loading} className="w-full">
             {loading ? "Creating..." : selectedIssues.length > 1 ? `Create ${selectedIssues.length} pipelines` : "Create pipeline"}
           </Button>
+          {repoPath && selectedIssues.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center">No issues selected — pipeline will run on repo only</p>
+          )}
         </div>
       </DialogContent>
     </Dialog>
