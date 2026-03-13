@@ -1,7 +1,7 @@
-"""Add Flutter Dependency Updater pipeline template
+"""Fix Flutter Dependency Updater template edges for graph connectivity
 
-Revision ID: 013
-Revises: 012
+Revision ID: 014
+Revises: 013
 """
 
 import json
@@ -9,14 +9,12 @@ import json
 from alembic import op
 import sqlalchemy as sa
 
-revision = "013"
-down_revision = "012"
+revision = "014"
+down_revision = "013"
 
 TEMPLATE_NAME = "Flutter Dependency Updater"
-TEMPLATE_DESC = (
-    "Audit and update all Flutter dependencies to latest major versions, "
-    "one by one. Fixes or reverts broken updates, creates PR with report."
-)
+
+# Complete fixed definition with all edges for full graph connectivity
 TEMPLATE_DEF = {
     "name": "Flutter Dependency Updater",
     "nodes": [
@@ -191,19 +189,31 @@ TEMPLATE_DEF = {
 def upgrade() -> None:
     op.execute(
         sa.text(
-            "INSERT INTO pipeline_templates (name, description, definition, created_at, updated_at) "
-            "VALUES (:name, :description, CAST(:definition AS JSONB), NOW(), NOW())"
+            "UPDATE pipeline_templates SET definition = CAST(:definition AS JSONB), "
+            "updated_at = NOW() WHERE name = :name"
         ).bindparams(
             name=TEMPLATE_NAME,
-            description=TEMPLATE_DESC,
             definition=json.dumps(TEMPLATE_DEF),
         )
     )
 
 
 def downgrade() -> None:
+    # Revert to the old definition without condition edges
+    old_edges = [
+        {"from": "start", "to": "audit"},
+        {"from": "audit", "to": "updater"},
+        {"from": "updater", "to": "build_check"},
+        {"from": "emergency_fix", "to": "fix_check"},
+        {"from": "create_pr", "to": "done"},
+    ]
+    old_def = {**TEMPLATE_DEF, "edges": old_edges}
     op.execute(
-        sa.text("DELETE FROM pipeline_templates WHERE name = :name").bindparams(
+        sa.text(
+            "UPDATE pipeline_templates SET definition = CAST(:definition AS JSONB), "
+            "updated_at = NOW() WHERE name = :name"
+        ).bindparams(
             name=TEMPLATE_NAME,
+            definition=json.dumps(old_def),
         )
     )
