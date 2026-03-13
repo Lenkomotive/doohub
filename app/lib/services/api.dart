@@ -142,7 +142,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> createSession({
     String model = 'opus',
-    String mode = 'oneshot',
+    String mode = 'general',
     required String projectPath,
   }) async {
     final res = await _dio.post('/sessions', data: {

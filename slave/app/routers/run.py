@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app import claude_runner
 from app.auth import require_api_key
 from app.event_bus import event_bus
-from app.runner import busy_keys, get_queue, start_run
+from app.runner import busy_keys
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class RunRequest(BaseModel):
     project_path: str = "/projects"
     model: str = "claude-opus-4-6"
     claude_session_id: str | None = None
-    mode: str = "oneshot"
+    mode: str = "general"
     timeout: int = 300
 
 
@@ -82,7 +82,7 @@ async def run_with_files(
     project_path: str = Form("/projects"),
     model: str = Form("claude-opus-4-6"),
     claude_session_id: str = Form(None),
-    mode: str = Form("oneshot"),
+    mode: str = Form("general"),
     timeout: int = Form(300),
     files: list[UploadFile] = File(default=[]),
 ):
@@ -128,35 +128,6 @@ async def run_with_files(
     return result
 
 
-@router.post("/run/stream")
-async def run_stream(req: RunRequest):
-    """SSE streaming run. Claude runs as a background task — safe to disconnect."""
-    if req.session_key in busy_keys():
-        q = get_queue(req.session_key)
-        if q is None:
-            raise HTTPException(status_code=409, detail="Session is busy")
-    else:
-        q = await start_run(
-            req.session_key, req.message, req.project_path,
-            req.model, req.claude_session_id, req.mode, req.timeout,
-        )
-
-    async def generate():
-        try:
-            while True:
-                try:
-                    event = await asyncio.wait_for(q.get(), timeout=25)
-                    yield _sse(event["event"], event)
-                    if event.get("event") in ("done", "error"):
-                        break
-                except asyncio.TimeoutError:
-                    yield ": ping\n\n"
-        except asyncio.CancelledError:
-            pass  # Client disconnected — Claude keeps running
-
-    return StreamingResponse(generate(), media_type="text/event-stream")
-
-
 @router.post("/cancel/{key}")
 async def cancel(key: str):
     cancelled = await claude_runner.cancel(key)
@@ -180,7 +151,10 @@ async def list_roles():
     roles = get_roles()
     return {
         "roles": {
-            k: {"title": v["title"], "has_tool_restrictions": "allowed_tools" in v}
+            k: {
+                "title": v["title"],
+                "has_tool_restrictions": "allowed_tools" in v,
+            }
             for k, v in roles.items()
         }
     }

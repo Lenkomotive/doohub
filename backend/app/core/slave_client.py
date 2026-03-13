@@ -93,7 +93,7 @@ class SlaveClient:
         project_path: str,
         model: str,
         claude_session_id: str | None,
-        mode: str = "oneshot",
+        mode: str = "general",
         timeout: int = 300,
         files: list[tuple[str, bytes, str]] | None = None,
     ) -> Any:
@@ -126,28 +126,6 @@ class SlaveClient:
             "mode": mode,
             "timeout": timeout,
         })
-
-    async def stream_run(
-        self,
-        session_key: str,
-        message: str,
-        project_path: str,
-        model: str,
-        claude_session_id: str | None,
-        mode: str = "freeform",
-        timeout: int = 300,
-    ) -> AsyncGenerator[dict, None]:
-        """Start a streaming run on the slave. Yields SSE events."""
-        async for event in self._stream_sse("POST", "/api/run/stream", json={
-            "session_key": session_key,
-            "message": message,
-            "project_path": project_path,
-            "model": model,
-            "claude_session_id": claude_session_id,
-            "mode": mode,
-            "timeout": timeout,
-        }):
-            yield event
 
     async def stream_events(self) -> AsyncGenerator[dict, None]:
         async for event in self._stream_sse("GET", "/api/events"):

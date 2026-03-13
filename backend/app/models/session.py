@@ -15,7 +15,7 @@ class Session(Base):
     name: Mapped[str] = mapped_column(String(200), default="untitled")
     project_path: Mapped[str] = mapped_column(String(500), default="")
     model: Mapped[str] = mapped_column(String(50), default="claude-opus-4-6")
-    mode: Mapped[str] = mapped_column(String(50), default="oneshot")
+    mode: Mapped[str] = mapped_column(String(50), default="general")
     claude_session_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

@@ -38,7 +38,7 @@ class Session {
       model: json['model'] ?? '',
       projectPath: json['project_path'] ?? '',
       claudeSessionId: json['claude_session_id'],
-      mode: json['mode'] ?? 'oneshot',
+      mode: json['mode'] ?? 'general',
     );
   }
 

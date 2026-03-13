@@ -14,41 +14,27 @@ logger = logging.getLogger(__name__)
 _ROLES_FILE = Path(__file__).parent / "roles.json"
 
 _DEFAULT_ROLES: dict[str, dict] = {
-    "planning": {
-        "title": "Software Architect",
+    "general": {
+        "title": "General",
         "prompt": (
-            "Your role is to analyze, plan, and design — NOT implement.\n"
+            "You are a helpful coding assistant with full access to all tools.\n"
+            "- Be concise and direct\n"
+            "- Read code before modifying it\n"
+            "- Explain what you did after making changes\n"
+        ),
+    },
+    "planning": {
+        "title": "Planner",
+        "prompt": (
+            "Focus on analysis, planning, and design.\n"
             "- Explore the codebase thoroughly to understand architecture and conventions\n"
             "- Provide clear, structured plans with concrete steps and trade-offs\n"
             "- Reference specific files and code when relevant\n"
-            "- Do NOT write code, create files, or make any changes\n"
-            "- Ask clarifying questions when requirements are ambiguous\n"
-        ),
-    },
-    "analysis": {
-        "title": "Code Analyst",
-        "prompt": (
-            "Your role is to explore, explain, and provide insights — strictly read-only.\n"
-            "- Read files, search code, and analyze patterns and architecture\n"
-            "- Identify issues, explain design decisions, surface technical debt\n"
-            "- Reference specific files and line numbers in your findings\n"
-            "- Do NOT write, edit, or create any files\n"
-            "- Do NOT run commands that modify state\n"
-        ),
-        "allowed_tools": ["Read", "Glob", "Grep", "Bash(git:*)"],
-    },
-    "freeform": {
-        "title": "Pair Programmer",
-        "prompt": (
-            "This is a live interactive session — think of it as pair programming.\n"
-            "- Keep responses concise and conversational\n"
-            "- Before implementing, briefly explain your plan and ask for confirmation\n"
-            "- After making changes, summarize what you did\n"
-            "- Ask clarifying questions when needed\n"
+            "- Prefer planning over implementing — only write code if explicitly asked\n"
         ),
     },
     "template_designer": {
-        "title": "Pipeline Template Designer",
+        "title": "Template Designer",
         "prompt": (
             "Your role is to create and edit pipeline templates.\n"
             "Existing templates are provided in <current-templates> tags in messages.\n"
@@ -102,16 +88,11 @@ _DEFAULT_ROLES: dict[str, dict] = {
 
 
 def _load_roles() -> dict[str, dict]:
-    """Load roles from JSON file, creating it with defaults if missing."""
-    if not _ROLES_FILE.exists():
-        _ROLES_FILE.write_text(json.dumps(_DEFAULT_ROLES, indent=2))
-        logger.info("Created default roles.json")
-        return _DEFAULT_ROLES.copy()
-    try:
-        return json.loads(_ROLES_FILE.read_text())
-    except (json.JSONDecodeError, OSError) as e:
-        logger.error("Failed to load roles.json: %s — using defaults", e)
-        return _DEFAULT_ROLES.copy()
+    """Load roles from JSON file, creating/refreshing it from defaults."""
+    # Always rewrite roles.json from defaults to pick up code changes.
+    # To customize roles, edit _DEFAULT_ROLES in this file instead.
+    _ROLES_FILE.write_text(json.dumps(_DEFAULT_ROLES, indent=2))
+    return _DEFAULT_ROLES.copy()
 
 
 def get_roles() -> dict[str, dict]:

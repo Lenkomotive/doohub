@@ -123,7 +123,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
   Map<String, String> _roles = {}; // mode key -> display title
   String _selectedProject = '';
   String _selectedModel = 'opus';
-  String _selectedMode = 'oneshot';
+  String _selectedMode = 'general';
   bool _loading = false;
   bool _loadingRepos = true;
   bool _loadingRoles = true;
@@ -163,7 +163,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
       });
     } catch (_) {
       setState(() {
-        _roles = {'oneshot': 'Oneshot', 'freeform': 'Freeform', 'planning': 'Planning', 'analysis': 'Analysis'};
+        _roles = {'general': 'General', 'planning': 'Planner'};
         _loadingRoles = false;
       });
     }
@@ -221,7 +221,7 @@ class _CreateSessionSheetState extends State<_CreateSessionSheet> {
               items: _roles.entries
                   .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
                   .toList(),
-              onChanged: (v) => setState(() => _selectedMode = v ?? 'oneshot'),
+              onChanged: (v) => setState(() => _selectedMode = v ?? 'general'),
             ),
           const SizedBox(height: 12),
           if (_loadingRepos)

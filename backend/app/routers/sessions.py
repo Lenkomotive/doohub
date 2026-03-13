@@ -18,9 +18,6 @@ from app.schemas.session import CreateSessionRequest
 
 router = APIRouter(tags=["sessions"])
 
-# Oneshot is the only non-streaming mode
-_NON_STREAMING_MODES = {"oneshot"}
-
 
 def _template_context(db: DBSession) -> str:
     """Build a lightweight template summary for injection into template_designer messages."""
@@ -234,11 +231,6 @@ async def send_message(
     if session.mode == "template_designer":
         slave_message = _template_context(db) + content
 
-    # Everything except oneshot uses streaming
-    if session.mode not in _NON_STREAMING_MODES:
-        return _stream_response(session, slave_message, db, user)
-
-    # Oneshot mode: blocking call
     file_tuples = None
     if files:
         file_tuples = []
@@ -273,64 +265,6 @@ async def send_message(
         "session_id": new_claude_sid,
         "cost_usd": result.get("cost_usd"),
     }
-
-
-def _stream_response(session: Session, content: str, db: DBSession, user: User) -> StreamingResponse:
-    """Return an SSE StreamingResponse that proxies the slave stream."""
-
-    async def generate():
-        full_text = ""
-        new_session_id = None
-        cost_usd = None
-
-        try:
-            async for event in slave.stream_run(
-                session_key=session.session_key,
-                message=content,
-                project_path=session.project_path,
-                model=session.model,
-                claude_session_id=session.claude_session_id,
-                mode=session.mode,
-            ):
-                evt = event.get("event", "message")
-
-                if evt == "token":
-                    token = event.get("token", "")
-                    full_text += token
-                    yield f"event: token\ndata: {json.dumps({'token': token})}\n\n"
-
-                elif evt == "tool_use":
-                    yield f"event: tool_use\ndata: {json.dumps({'tool': event.get('tool', ''), 'input': event.get('input', {})})}\n\n"
-
-                elif evt == "tool_result":
-                    yield f"event: tool_result\ndata: {json.dumps({'tool': event.get('tool', ''), 'output': event.get('output', '')})}\n\n"
-
-                elif evt == "done":
-                    full_text = event.get("result", full_text).strip()
-                    new_session_id = event.get("session_id")
-                    cost_usd = event.get("cost_usd")
-                    yield f"event: done\ndata: {json.dumps({'result': full_text, 'session_id': new_session_id, 'cost_usd': cost_usd})}\n\n"
-
-                elif evt == "error":
-                    full_text = event.get("error", "Error occurred")
-                    yield f"event: error\ndata: {json.dumps({'error': full_text})}\n\n"
-
-        except Exception as e:
-            full_text = full_text or f"Stream error: {e}"
-            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
-
-        # Save the assistant message after stream completes
-        if full_text:
-            if new_session_id:
-                session.claude_session_id = new_session_id
-            db.add(SessionMessage(session_id=session.id, role="assistant", content=full_text))
-            db.commit()
-
-            if user.fcm_token and user.notify_sessions:
-                preview = full_text[:100] + ("..." if len(full_text) > 100 else "")
-                send_push(user.fcm_token, session.name or "Session reply", preview, {"session_key": session.session_key})
-
-    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 @router.post("/sessions/{session_key}/cancel")

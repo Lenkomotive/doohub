@@ -38,7 +38,7 @@ class SessionsCubit extends Cubit<SessionsState> {
               model: info['model'] as String? ?? '',
               projectPath: info['project_path'] as String? ?? '',
               claudeSessionId: info['claude_session_id'] as String?,
-              mode: info['mode'] as String? ?? 'oneshot',
+              mode: info['mode'] as String? ?? 'general',
               messages: existing?.messages ?? const [],
               sending: existing?.sending ?? false,
               chatStatus: existing?.chatStatus ?? ChatStatus.initial,
@@ -137,7 +137,7 @@ class SessionsCubit extends Cubit<SessionsState> {
   Future<String> createSession({
     required String projectPath,
     String model = 'opus',
-    String mode = 'oneshot',
+    String mode = 'general',
   }) async {
     final data = await api.createSession(
       projectPath: projectPath,

@@ -47,11 +47,11 @@ interface SessionInfo {
   claude_session_id: string | null;
 }
 
-const MODE_LABELS: Record<SessionMode, { label: string; color: string }> = {
+const MODE_LABELS: Record<string, { label: string; color: string }> = {
+  general: { label: "general", color: "bg-blue-500/15 text-blue-500" },
   oneshot: { label: "oneshot", color: "bg-blue-500/15 text-blue-500" },
-  freeform: { label: "freeform", color: "bg-violet-500/15 text-violet-500" },
-  planning: { label: "planning", color: "bg-amber-500/15 text-amber-500" },
-  analysis: { label: "analysis", color: "bg-teal-500/15 text-teal-500" },
+  planning: { label: "planner", color: "bg-amber-500/15 text-amber-500" },
+  template_designer: { label: "templates", color: "bg-violet-500/15 text-violet-500" },
 };
 
 function formatFileSize(bytes: number): string {

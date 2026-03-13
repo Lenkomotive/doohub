@@ -71,14 +71,13 @@ def _build_cmd(
     prompt: str,
     model: str,
     claude_session_id: str | None,
-    output_format: str,
-    mode: str = "oneshot",
+    mode: str = "general",
     project_path: str = ".",
 ) -> list[str]:
     cmd = [
         "claude",
         "-p", prompt,
-        "--output-format", output_format,
+        "--output-format", "json",
         "--model", model,
         "--verbose",
     ]
@@ -114,10 +113,10 @@ async def run_prompt(
     claude_session_id: str | None = None,
     timeout: int = 300,
     session_key: str | None = None,
-    mode: str = "oneshot",
+    mode: str = "general",
 ) -> dict:
     """Blocking Claude run. Returns parsed result dict."""
-    cmd = _build_cmd(prompt, model, claude_session_id, "json", mode, project_path)
+    cmd = _build_cmd(prompt, model, claude_session_id, mode, project_path)
     _sync_claude_md()
     _ensure_claude_config()
     await _git_pull(project_path)
@@ -161,113 +160,6 @@ async def run_prompt(
         return json.loads(raw)
     except json.JSONDecodeError:
         return {"type": "result", "result": raw.strip(), "session_id": claude_session_id}
-
-
-async def stream_prompt(
-    prompt: str,
-    project_path: str,
-    model: str = "claude-opus-4-6",
-    claude_session_id: str | None = None,
-    timeout: int = 300,
-    session_key: str | None = None,
-    mode: str = "oneshot",
-):
-    """Streaming Claude run. Yields event dicts:
-    - {"event": "token", "session_key": key, "token": "..."}
-    - {"event": "tool_use", "session_key": key, "tool": "...", "input": {...}}
-    - {"event": "tool_result", "session_key": key, "tool": "...", "output": "..."}
-    - {"event": "done",  "session_key": key, "result": "...", "session_id": "...", "cost_usd": ...}
-    - {"event": "error", "session_key": key, "error": "..."}
-    """
-    cmd = _build_cmd(prompt, model, claude_session_id, "stream-json", mode, project_path)
-    _sync_claude_md()
-    _ensure_claude_config()
-    await _git_pull(project_path)
-    cwd = _resolve_cwd(project_path)
-    logger.info("Streaming claude in %s session=%s model=%s", cwd, session_key, model)
-
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=cwd,
-    )
-    if session_key:
-        _running_procs[session_key] = proc
-
-    key = session_key or "unknown"
-    result_text = ""
-    new_session_id = claude_session_id
-    cost_usd = None
-
-    try:
-        deadline = asyncio.get_event_loop().time() + timeout
-        async for raw_line in proc.stdout:
-            if asyncio.get_event_loop().time() > deadline:
-                proc.kill()
-                await proc.wait()
-                yield {"event": "error", "session_key": key, "error": "Response timed out."}
-                return
-
-            line = raw_line.decode("utf-8", errors="replace").strip()
-            if not line:
-                continue
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            etype = event.get("type")
-            if etype == "assistant":
-                for block in event.get("message", {}).get("content", []):
-                    btype = block.get("type")
-                    if btype == "text":
-                        chunk = block["text"]
-                        result_text += chunk
-                        yield {"event": "token", "session_key": key, "token": chunk}
-                    elif btype == "tool_use":
-                        yield {
-                            "event": "tool_use",
-                            "session_key": key,
-                            "tool": block.get("name", ""),
-                            "input": block.get("input", {}),
-                        }
-                    elif btype == "tool_result":
-                        yield {
-                            "event": "tool_result",
-                            "session_key": key,
-                            "tool": block.get("name", ""),
-                            "output": block.get("content", block.get("text", "")),
-                        }
-            elif etype == "result":
-                new_session_id = event.get("session_id", new_session_id)
-                cost_usd = event.get("cost_usd")
-                result_text = event.get("result", result_text).strip()
-
-        await proc.wait()
-
-    except Exception as e:
-        proc.kill()
-        await proc.wait()
-        yield {"event": "error", "session_key": key, "error": str(e)}
-        return
-    finally:
-        if session_key:
-            _running_procs.pop(session_key, None)
-        _ensure_claude_config()
-
-    if proc.returncode != 0:
-        err = (await proc.stderr.read()).decode("utf-8", errors="replace").strip()
-        yield {"event": "error", "session_key": key, "error": err or f"Claude exited with code {proc.returncode}"}
-        return
-
-    yield {
-        "event": "done",
-        "session_key": key,
-        "result": result_text,
-        "session_id": new_session_id,
-        "cost_usd": cost_usd,
-    }
 
 
 async def cancel(session_key: str) -> bool:
