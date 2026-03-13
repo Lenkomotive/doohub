@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 function sessionBorderClass(data: Record<string, unknown>, selected: boolean): string {
   if (selected) return "border-emerald-500 ring-1 ring-emerald-500/30";
   if (data.resume_self) return "border-amber-500 ring-1 ring-amber-500/30";
-  if (data.resume_from) return "border-violet-500 ring-1 ring-violet-500/30";
+  if (data.resume_from) return "border-blue-500 ring-1 ring-blue-500/30";
   return "border-border/50";
 }
 
@@ -41,7 +41,7 @@ export function AgentNode({ data, selected }: NodeProps) {
           {model}
         </Badge>
         {resumeLabel && (
-          <Badge variant="outline" className={`text-[9px] px-1 py-0 ${data.resume_self ? "border-amber-500 text-amber-600" : "border-violet-500 text-violet-600"}`}>
+          <Badge variant="outline" className={`text-[9px] px-1 py-0 ${data.resume_self ? "border-amber-500 text-amber-600" : "border-blue-500 text-blue-600"}`}>
             {resumeLabel}
           </Badge>
         )}
