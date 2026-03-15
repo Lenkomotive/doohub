@@ -1,0 +1,35 @@
+name: doohub
+options:
+  bundleIdPrefix: com.doo.doohub
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+  developmentLanguage: en
+
+packages:
+  FirebaseMessaging:
+    url: https://github.com/firebase/firebase-ios-sdk
+    majorVersion: "11.0.0"
+  MarkdownUI:
+    url: https://github.com/gonzalezreal/swift-markdown-ui
+    majorVersion: "2.0.0"
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: XWG3ZN6SZ9
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: 1
+
+targets:
+  doohub:
+    type: application
+    platform: iOS
+    sources:
+      - doohub
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.doo.doohub
+        INFOPLIST_FILE: doohub/Info.plist
+    dependencies:
+      - package: FirebaseMessaging
+      - package: MarkdownUI
